@@ -31,7 +31,7 @@ export default function AdminPage() {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .order("dataAgendamento", { ascending: true })
+        .order("data_agendamento", { ascending: true })
 
       if (error) {
         throw error
@@ -94,7 +94,7 @@ export default function AdminPage() {
       try {
         const { error } = await supabase
           .from("agendamentos")
-          .update({ dataAgendamento: newDate, horario: newTime })
+          .update({ data_agendamento: newDate, horario: newTime })
           .eq("id", selectedAppointment.id)
 
         if (error) {
@@ -155,7 +155,7 @@ export default function AdminPage() {
                   <TableRow key={appointment.id}>
                     <TableCell>{appointment.nome}</TableCell>
                     <TableCell>{appointment.cpf}</TableCell>
-                    <TableCell>{new Date(appointment.dataAgendamento).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(appointment.data_agendamento).toLocaleDateString()}</TableCell>
                     <TableCell>{appointment.horario}</TableCell>
                     <TableCell>
                       <Select

@@ -44,16 +44,16 @@ export default function AgendamentoPage() {
 
     const { data, error } = await supabase
       .from("agendamentos")
-      .select("dataAgendamento")
-      .gte("dataAgendamento", startDate.toISOString())
-      .lte("dataAgendamento", endDate.toISOString())
+      .select("data_agendamento")
+      .gte("data_agendamento", startDate.toISOString())
+      .lte("data_agendamento", endDate.toISOString())
 
     if (error) {
       console.error("Erro ao buscar datas disponíveis:", error)
       return
     }
 
-    const bookedDates = new Set(data.map((item) => item.dataAgendamento.split("T")[0]))
+    const bookedDates = new Set(data.map((item) => item.data_agendamento.split("T")[0]))
     const availableDates = []
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -69,7 +69,7 @@ export default function AgendamentoPage() {
     const { data, error } = await supabase
       .from("agendamentos")
       .select("horario")
-      .eq("dataAgendamento", date.toISOString().split("T")[0])
+      .eq("data_agendamento", date.toISOString().split("T")[0])
 
     if (error) {
       console.error("Erro ao buscar horários disponíveis:", error)
@@ -107,12 +107,12 @@ export default function AgendamentoPage() {
         {
           nome: formData.nome,
           cpf: formData.cpf,
-          dataNascimento: formData.dataNascimento,
+          data_nascimento: formData.dataNascimento,
           telefone: formData.telefone,
           email: formData.email,
-          dataAgendamento: formData.dataAgendamento?.toISOString(),
+          data_agendamento: formData.dataAgendamento?.toISOString(),
           horario: formData.horario,
-          certidaoUrl: formData.certidaoUrl,
+          certidao_url: formData.certidaoUrl,
           status: "Agendado",
         },
       ])

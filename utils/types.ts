@@ -4,12 +4,12 @@ export interface Appointment {
   id: number
   nome: string
   cpf: string
-  dataNascimento: string
+  data_nascimento: string
   telefone: string
   email: string
-  dataAgendamento: Date
+  data_agendamento: string
   horario: string
-  certidaoUrl: string
+  certidao_url: string
   status: AppointmentStatus
 }
 
