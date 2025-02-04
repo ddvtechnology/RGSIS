@@ -236,15 +236,43 @@ export default function AgendamentoPage() {
           <div style="text-align: left; margin-bottom: 15px;">
             ${mensagem.replace(/\n/g, '<br>')}
           </div>
-          <div style="margin-top: 15px;">
-            <button onclick="navigator.clipboard.writeText(\`${mensagem}\`)" class="swal2-confirm swal2-styled">
-              Copiar mensagem
-            </button>
-          </div>
         `,
         icon: 'success',
+        showConfirmButton: true,
         confirmButtonText: 'OK',
-        confirmButtonColor: '#15803d'
+        confirmButtonColor: '#15803d',
+        showCloseButton: true,
+        showDenyButton: true,
+        denyButtonText: 'Copiar mensagem',
+        denyButtonColor: '#2563eb',
+        preConfirm: () => {
+          return new Promise((resolve) => {
+            resolve(true)
+          })
+        },
+        preDeny: async () => {
+          try {
+            await navigator.clipboard.writeText(mensagem)
+            await Swal.fire({
+              title: 'Copiado!',
+              text: 'Mensagem copiada com sucesso!',
+              icon: 'success',
+              timer: 1500,
+              showConfirmButton: false
+            })
+            return false // Mantém o modal principal aberto
+          } catch (err) {
+            console.error('Erro ao copiar:', err)
+            await Swal.fire({
+              title: 'Erro',
+              text: 'Não foi possível copiar a mensagem',
+              icon: 'error',
+              timer: 1500,
+              showConfirmButton: false
+            })
+            return false // Mantém o modal principal aberto
+          }
+        }
       })
 
       setFormData({
