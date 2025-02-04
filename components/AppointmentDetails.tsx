@@ -24,7 +24,7 @@ export function AppointmentDetails({ appointment, isOpen, onClose }: Appointment
             <strong>CPF:</strong> {appointment.cpf}
           </div>
           <div>
-            <strong>Data de Nascimento:</strong> {appointment.dataNascimento}
+            <strong>Data de Nascimento:</strong> {appointment.data_nascimento}
           </div>
           <div>
             <strong>Telefone:</strong> {appointment.telefone}
@@ -33,7 +33,7 @@ export function AppointmentDetails({ appointment, isOpen, onClose }: Appointment
             <strong>E-mail:</strong> {appointment.email}
           </div>
           <div>
-            <strong>Data do Agendamento:</strong> {new Date(appointment.dataAgendamento).toLocaleDateString()}
+            <strong>Data do Agendamento:</strong> {new Date(appointment.data_agendamento).toLocaleDateString()}
           </div>
           <div>
             <strong>Horário:</strong> {appointment.horario}
@@ -42,15 +42,7 @@ export function AppointmentDetails({ appointment, isOpen, onClose }: Appointment
             <strong>Status:</strong> {appointment.status}
           </div>
           <div>
-            <strong>Certidão:</strong>
-            <a
-              href={appointment.certidaoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
-            >
-              Visualizar Certidão
-            </a>
+            <strong>Tipo:</strong> {appointment.tipo}
           </div>
         </div>
       </DialogContent>

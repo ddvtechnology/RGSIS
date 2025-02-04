@@ -1,15 +1,14 @@
-export type AppointmentStatus = "Agendado" | "Confirmado" | "Cancelado" | "Não Compareceu" | "Concluído"
+export type AppointmentStatus = "Agendado" | "Concluído" | "Não Compareceu" | "Cancelado"
+export type AppointmentType = "Online" | "Presencial"
 
 export interface Appointment {
-  id: number
+  id: string
   nome: string
   cpf: string
-  data_nascimento: string
-  telefone: string
-  email: string
   data_agendamento: string
   horario: string
-  certidao_url: string
   status: AppointmentStatus
+  tipo: AppointmentType
+  created_at: string
 }
 

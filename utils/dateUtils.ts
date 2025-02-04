@@ -1,3 +1,25 @@
+export function generateTimeSlots(date: Date) {
+  // Verifica se é sexta-feira (5)
+  const isSexta = date.getDay() === 5
+
+  // Define os horários base
+  const horarios = [
+    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
+    "11:00", "11:30", "13:00", "13:30", "14:00", "14:30",
+    "15:00", "15:30"
+  ]
+
+  // Se for sexta, retorna apenas os horários até 13:00
+  if (isSexta) {
+    return horarios.filter(horario => {
+      const hora = parseInt(horario.split(":")[0])
+      return hora < 13
+    })
+  }
+
+  return horarios
+}
+
 export function generateAvailableDates(startDate: Date, numberOfDays: number) {
   const dates = []
   const currentDate = new Date(startDate)
@@ -13,26 +35,12 @@ export function generateAvailableDates(startDate: Date, numberOfDays: number) {
   return dates
 }
 
-export function generateTimeSlots() {
-  const slots = []
-  const startTime = 8 * 60 // 8:00 AM em minutos
-  const endTime = 17 * 60 // 5:00 PM em minutos
-  const lunchStart = 13 * 60 // 1:00 PM em minutos
-  const lunchEnd = 14 * 60 // 2:00 PM em minutos
-  const interval = 30 // 30 minutos
-
-  for (let i = startTime; i < endTime; i += interval) {
-    if (i >= lunchStart && i < lunchEnd) continue // Pular horário de almoço
-
-    const hours = Math.floor(i / 60)
-    const minutes = i % 60
-    slots.push(`${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`)
-  }
-
-  return slots
-}
-
 export function formatDate(date: Date) {
-  return date.toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+  return date.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
 }
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 
@@ -14,10 +14,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setIsLoading(true)
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -35,20 +37,24 @@ export default function LoginPage() {
       }
     } catch (error) {
       setError("Falha na autenticação. Por favor, verifique suas credenciais.")
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-144px)]">
-      <Card className="w-[350px]">
-        <CardHeader>
-          <CardTitle>Login Administrativo</CardTitle>
-          <CardDescription>Acesse o painel de controle</CardDescription>
+      <Card className="w-[400px] shadow-lg border-0">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">Login Administrativo</CardTitle>
+          <CardDescription className="text-center">
+            Acesse o painel de controle do sistema
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin}>
-            <div className="grid w-full items-center gap-4">
-              <div className="flex flex-col space-y-1.5">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
@@ -57,9 +63,10 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="w-full"
                 />
               </div>
-              <div className="flex flex-col space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
                 <Input
                   id="password"
@@ -68,22 +75,25 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="w-full"
                 />
               </div>
             </div>
             {error && (
-              <Alert variant="destructive" className="mt-4">
+              <Alert variant="destructive">
                 <AlertTitle>Erro</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+            <Button 
+              type="submit" 
+              className="w-full bg-green-700 hover:bg-green-600 text-white"
+              disabled={isLoading}
+            >
+              {isLoading ? "Entrando..." : "Entrar"}
+            </Button>
           </form>
         </CardContent>
-        <CardFooter>
-          <Button className="w-full" type="submit" onClick={handleLogin}>
-            Entrar
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )
