@@ -135,12 +135,23 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
       // Remove o horário agendado da lista de disponíveis
       setAvailableTimeSlots(prev => prev.filter(h => h !== formData.horario))
 
-      const mensagem = `🗓️ Agendamento confirmado!\n\n📋 Nome: ${formData.nome}\n📅 Data: ${format(dataAjustada, "dd/MM/yyyy")}\n⏰ Horário: ${formData.horario}\n🏥 Tipo: ${formData.tipo}\n\nPor favor, compareça com 15 minutos de antecedência e traga seus documentos.`
+      const mensagem = `🗓️ *Agendamento RG - São Bento do Una*\n\n` +
+        `📋 Nome: ${formData.nome}\n` +
+        `📅 Data: ${format(dataAjustada, "dd/MM/yyyy")}\n` +
+        `⏰ Horário: ${formData.horario}\n` +
+        `📍 Local: Secretaria de Assistência Social\n` +
+        `🏥 Tipo: ${formData.tipo}\n\n` +
+        `*Documentos necessários:*\n` +
+        `- Certidão de Nascimento ou Casamento (original)\n` +
+        `- Comprovante de residência\n` +
+        `- CPF\n\n` +
+        `⚠️ *Importante:* Chegue com 30 minutos de antecedência.\n\n` +
+        `Em caso de dúvidas, entre em contato conosco.`
 
       await Swal.fire({
         title: 'Agendamento realizado com sucesso!',
         html: `
-          <div style="text-align: left; margin-bottom: 15px;">
+          <div style="text-align: left; margin-bottom: 15px; font-size: 1.1em;">
             ${mensagem.replace(/\n/g, '<br>')}
           </div>
         `,
@@ -152,6 +163,10 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
         showDenyButton: true,
         denyButtonText: 'Copiar mensagem',
         denyButtonColor: '#2563eb',
+        customClass: {
+          popup: 'max-w-md mx-auto',
+          content: 'text-left',
+        },
         preConfirm: () => {
           return new Promise((resolve) => {
             resolve(true)
@@ -210,63 +225,92 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Agendar Novo Atendimento</CardTitle>
-        <CardDescription>Preencha os dados para agendar um novo atendimento</CardDescription>
+    <Card className="shadow-lg">
+      <CardHeader className="space-y-1 px-4 md:px-6 py-4">
+        <CardTitle className="text-xl md:text-2xl font-bold text-gray-900">Agendar Novo Atendimento</CardTitle>
+        <CardDescription className="text-gray-600">Preencha os dados para agendar um novo atendimento</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 md:p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="nome">Nome Completo</Label>
-              <Input id="nome" name="nome" value={formData.nome} onChange={handleChange} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cpf">CPF</Label>
-              <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleChange} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dataNascimento">Data de Nascimento</Label>
-              <Input
-                id="dataNascimento"
-                name="dataNascimento"
-                type="date"
-                value={formData.dataNascimento}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="telefone">Telefone</Label>
-              <Input id="telefone" name="telefone" value={formData.telefone} onChange={handleChange} required />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <div className="space-y-4">
-              <Label>Data do Agendamento</Label>
-              <div className="p-2 border rounded-lg bg-gray-50/50">
-                <Calendar
-                  mode="single"
-                  selected={formData.dataAgendamento}
-                  onSelect={handleDateSelect}
-                  locale={ptBR}
-                  weekStartsOn={0}
-                  ISOWeek={false}
-                  disabled={(date) => {
-                    const today = new Date()
-                    today.setHours(0, 0, 0, 0)
-                    return date < today || date.getDay() === 0 || date.getDay() === 6
-                  }}
-                  className="rounded-md border bg-white"
+              <div className="space-y-2">
+                <Label htmlFor="nome" className="text-sm font-medium text-gray-700">Nome Completo</Label>
+                <Input
+                  id="nome"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleChange}
+                  required
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
+                  placeholder="Digite o nome completo"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="cpf" className="text-sm font-medium text-gray-700">CPF</Label>
+                <Input
+                  id="cpf"
+                  name="cpf"
+                  value={formData.cpf}
+                  onChange={handleChange}
+                  required
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
+                  placeholder="Digite o CPF"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dataNascimento" className="text-sm font-medium text-gray-700">Data de Nascimento</Label>
+                <Input
+                  id="dataNascimento"
+                  name="dataNascimento"
+                  type="date"
+                  value={formData.dataNascimento}
+                  onChange={handleChange}
+                  required
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="telefone" className="text-sm font-medium text-gray-700">Telefone</Label>
+                <Input
+                  id="telefone"
+                  name="telefone"
+                  value={formData.telefone}
+                  onChange={handleChange}
+                  required
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
+                  placeholder="Digite o telefone"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Data do Agendamento</Label>
+                <div className="p-2 border rounded-lg bg-gray-50/50">
+                  <Calendar
+                    mode="single"
+                    selected={formData.dataAgendamento}
+                    onSelect={handleDateSelect}
+                    locale={ptBR}
+                    weekStartsOn={0}
+                    ISOWeek={false}
+                    disabled={(date) => {
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      return date < today || date.getDay() === 0 || date.getDay() === 6
+                    }}
+                    className="rounded-md border bg-white"
+                  />
+                </div>
+              </div>
+
               {formData.dataAgendamento && availableTimeSlots.length > 0 && (
                 <div className="mt-4 p-3 bg-green-50 rounded-md border border-green-200">
                   <h4 className="text-sm font-medium text-green-900 mb-2">
                     Horários Disponíveis:
                   </h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {availableTimeSlots.sort().map((horario) => (
                       <div key={horario} className="text-sm text-green-700 flex items-center">
                         • {horario}
@@ -275,6 +319,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
                   </div>
                 </div>
               )}
+
               {formData.dataAgendamento && availableTimeSlots.length === 0 && (
                 <div className="mt-4 p-3 bg-yellow-50 rounded-md border border-yellow-200">
                   <h4 className="text-sm font-medium text-yellow-900">
@@ -282,11 +327,9 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
                   </h4>
                 </div>
               )}
-            </div>
 
-            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="horario">Horário</Label>
+                <Label className="text-sm font-medium text-gray-700">Horário</Label>
                 <Select
                   value={formData.horario}
                   onValueChange={(value) => handleSelectChange("horario", value)}
@@ -294,19 +337,16 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={
-                      !formData.dataAgendamento 
+                      !formData.dataAgendamento
                         ? "Selecione uma data primeiro"
                         : availableTimeSlots.length === 0
-                        ? "Nenhum horário disponível"
-                        : "Selecione um horário"
+                          ? "Nenhum horário disponível"
+                          : "Selecione um horário"
                     } />
                   </SelectTrigger>
                   <SelectContent>
                     {availableTimeSlots.sort().map((horario) => (
-                      <SelectItem 
-                        key={horario} 
-                        value={horario}
-                      >
+                      <SelectItem key={horario} value={horario}>
                         {horario}
                       </SelectItem>
                     ))}
@@ -315,12 +355,20 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
               </div>
             </div>
           </div>
-          <Button 
-            type="submit" 
-            className="w-full mt-6"
+
+          <Button
+            type="submit"
+            className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!formData.dataAgendamento || !formData.horario || isSubmitting}
           >
-            {isSubmitting ? "Agendando..." : "Agendar"}
+            {isSubmitting ? (
+              <div className="flex items-center justify-center">
+                <span className="mr-2">Agendando...</span>
+                <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+              </div>
+            ) : (
+              "Agendar"
+            )}
           </Button>
         </form>
       </CardContent>

@@ -1,371 +1,350 @@
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, Cell, CartesianGrid, Pie, PieChart as RechartsPieChart } from "recharts"
-import type { Appointment } from "@/utils/types"
-import * as XLSX from 'xlsx'
-import { Calendar, BarChart as BarChartIcon, PieChart as PieChartIcon } from "lucide-react"
-import { FileSpreadsheet } from "lucide-react"
+"use client"
 
-interface ReportGeneratorProps {
-  appointments: Appointment[]
-}
+import { useState, useEffect } from "react"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
+import { Calendar as CalendarIcon, Download, ChartPie, BarChart as BarChartIcon } from "lucide-react"
+import { Calendar } from "./ui/calendar"
+import { Label } from "./ui/label"
+import { Input } from "./ui/input"
+import { Button } from "./ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { supabase } from "@/lib/supabase"
+import Swal from "sweetalert2"
 
 const STATUS_COLORS = {
-  "Agendado": "#2563eb",
-  "Confirmado": "#16a34a",
-  "Cancelado": "#dc2626",
-  "Concluído": "#9333ea",
-  "Não Compareceu": "#f59e0b"
+  "Agendado": "#3b82f6",
+  "Confirmado": "#22c55e",
+  "Cancelado": "#ef4444",
+  "Concluído": "#8b5cf6"
 }
 
-const STATUS_ORDER = ["Agendado", "Confirmado", "Cancelado", "Não Compareceu", "Concluído"]
+const STATUS_ORDER = ["Agendado", "Confirmado", "Cancelado", "Concluído"]
 
-const BUTTON_COLORS = {
-  dailyAttendance: "bg-blue-500 hover:bg-blue-600 text-white",
-  monthlyUtilization: "bg-green-500 hover:bg-green-600 text-white",
-  statusDistribution: "bg-purple-500 hover:bg-purple-600 text-white",
-}
+export function ReportGenerator() {
+  const [startDate, setStartDate] = useState<Date>(new Date())
+  const [endDate, setEndDate] = useState<Date>(new Date())
+  const [reportData, setReportData] = useState<any[]>([])
+  const [dailyData, setDailyData] = useState<any[]>([])
+  const [monthlyData, setMonthlyData] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-  const RADIAN = Math.PI / 180
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5
-  const x = cx + radius * Math.cos(-midAngle * RADIAN)
-  const y = cy + radius * Math.sin(-midAngle * RADIAN)
+  useEffect(() => {
+    generateReport()
+  }, [startDate, endDate])
 
-  return (
-    <text
-      x={x}
-      y={y}
-      fill="white"
-      textAnchor={x > cx ? 'start' : 'end'}
-      dominantBaseline="central"
-    >
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
-  )
-}
-
-export function ReportGenerator({ appointments }: ReportGeneratorProps) {
-  const [reportType, setReportType] = useState<string>("")
-
-  const processAppointmentsForDaily = () => {
-    const dailyCount = new Map<string, number>()
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    // Agrupa por dia
-    appointments.forEach(app => {
-      const date = new Date(app.data_agendamento)
-      date.setHours(0, 0, 0, 0)
-      const dateStr = date.toLocaleDateString('pt-BR')
-      dailyCount.set(dateStr, (dailyCount.get(dateStr) || 0) + 1)
-    })
-
-    // Converte para array e ordena por data
-    return Array.from(dailyCount.entries())
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  }
-
-  const processAppointmentsForMonthly = () => {
-    const monthlyCount = new Map<string, number>()
-    const months = [
-      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ]
-
-    // Agrupa por mês
-    appointments.forEach(app => {
-      const date = new Date(app.data_agendamento)
-      const monthStr = months[date.getMonth()]
-      monthlyCount.set(monthStr, (monthlyCount.get(monthStr) || 0) + 1)
-    })
-
-    // Converte para array e mantém ordem dos meses
-    return months
-      .filter(month => monthlyCount.has(month))
-      .map(month => ({
-        month,
-        count: monthlyCount.get(month) || 0
-      }))
-  }
-
-  const processAppointmentsForStatus = () => {
-    const statusCount = new Map<string, number>()
-
-    // Conta por status
-    appointments.forEach(app => {
-      const status = app.status // Não converte para minúsculo
-      statusCount.set(status, (statusCount.get(status) || 0) + 1)
-    })
-
-    // Converte para array e ordena conforme STATUS_ORDER
-    return STATUS_ORDER
-      .map(status => ({
-        name: status,
-        value: statusCount.get(status) || 0
-      }))
-      .filter(item => item.value > 0) // Remove status sem agendamentos
-  }
-
-  const exportToExcel = () => {
-    if (!reportType) return
-
-    let dataToExport = []
-    let fileName = "relatorio"
-
-    switch (reportType) {
-      case "dailyAttendance":
-        const today = new Date()
-        const todayAppointments = appointments.filter(
-          (app) => new Date(app.data_agendamento).toDateString() === today.toDateString()
-        )
-        dataToExport = todayAppointments.map(app => ({
-          Nome: app.nome,
-          CPF: app.cpf,
-          'Data de Nascimento': app.data_nascimento,
-          Telefone: app.telefone,
-          Email: app.email,
-          'Data do Agendamento': new Date(app.data_agendamento).toLocaleDateString(),
-          Horário: app.horario,
-          Status: app.status,
-          Tipo: app.tipo
-        }))
-        fileName = `relatorio_diario_${today.toISOString().split('T')[0]}`
-        break
-
-      case "monthlyUtilization":
-        const currentMonth = new Date().getMonth()
-        const currentYear = new Date().getFullYear()
-        const monthAppointments = appointments.filter((app) => {
-          const appDate = new Date(app.data_agendamento)
-          return appDate.getMonth() === currentMonth && appDate.getFullYear() === currentYear
-        })
-        dataToExport = monthAppointments.map(app => ({
-          Nome: app.nome,
-          CPF: app.cpf,
-          'Data de Nascimento': app.data_nascimento,
-          Telefone: app.telefone,
-          Email: app.email,
-          'Data do Agendamento': new Date(app.data_agendamento).toLocaleDateString(),
-          Horário: app.horario,
-          Status: app.status,
-          Tipo: app.tipo
-        }))
-        fileName = `relatorio_mensal_${new Date().getFullYear()}_${currentMonth + 1}`
-        break
-
-      case "statusDistribution":
-        const statusData = processAppointmentsForStatus()
-        dataToExport = statusData
-        fileName = `relatorio_status_${new Date().toISOString().split('T')[0]}`
-        break
-
-      default:
-        return
-    }
-
+  const generateReport = async () => {
     try {
-      const ws = XLSX.utils.json_to_sheet(dataToExport)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, "Relatório")
-      XLSX.writeFile(wb, `${fileName}.xlsx`)
+      setIsLoading(true)
+      const start = new Date(startDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .gte("data_agendamento", start.toISOString().split("T")[0])
+        .lte("data_agendamento", end.toISOString().split("T")[0])
+
+      if (error) throw error
+
+      // Relatório por Status
+      const statusCount = data.reduce((acc: { [key: string]: number }, curr) => {
+        acc[curr.status] = (acc[curr.status] || 0) + 1
+        return acc
+      }, {})
+
+      const chartData = STATUS_ORDER
+        .filter(status => statusCount[status] > 0)
+        .map(status => ({
+          name: status,
+          value: statusCount[status]
+        }))
+
+      setReportData(chartData)
+
+      // Relatório Diário
+      const dailyCount = data.reduce((acc: { [key: string]: number }, curr) => {
+        const date = format(new Date(curr.data_agendamento), "dd/MM/yyyy")
+        acc[date] = (acc[date] || 0) + 1
+        return acc
+      }, {})
+
+      const dailyChartData = Object.entries(dailyCount).map(([date, count]) => ({
+        date,
+        quantidade: count
+      })).sort((a, b) => {
+        const [diaA, mesA, anoA] = a.date.split("/")
+        const [diaB, mesB, anoB] = b.date.split("/")
+        return new Date(Number(anoA), Number(mesA) - 1, Number(diaA)).getTime() - 
+               new Date(Number(anoB), Number(mesB) - 1, Number(diaB)).getTime()
+      })
+
+      setDailyData(dailyChartData)
+
+      // Relatório Mensal
+      const monthlyCount = data.reduce((acc: { [key: string]: number }, curr) => {
+        const month = format(new Date(curr.data_agendamento), "MMMM/yyyy", { locale: ptBR })
+        acc[month] = (acc[month] || 0) + 1
+        return acc
+      }, {})
+
+      const monthlyChartData = Object.entries(monthlyCount).map(([month, count]) => ({
+        month,
+        quantidade: count
+      }))
+
+      setMonthlyData(monthlyChartData)
+
     } catch (error) {
-      console.error("Erro ao exportar para Excel:", error)
-      alert("Erro ao exportar relatório. Por favor, tente novamente.")
+      console.error("Erro ao gerar relatório:", error)
+      await Swal.fire({
+        title: "Erro!",
+        text: "Não foi possível gerar o relatório.",
+        icon: "error",
+        confirmButtonColor: "#15803d"
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const generateDailyAttendanceReport = () => {
-    const dailyData = processAppointmentsForDaily()
-    
-    return (
-      <div className="w-full overflow-x-auto">
-        <div className="min-w-[300px] h-[300px] md:h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dailyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="count" fill="#16a34a" name="Atendimentos" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Atendimentos</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {dailyData.map((item, index) => (
-                <tr key={index}>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.date}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )
-  }
+  const exportToCSV = async () => {
+    try {
+      const start = new Date(startDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
 
-  const generateMonthlyUtilizationReport = () => {
-    const monthlyData = processAppointmentsForMonthly()
-    
-    return (
-      <div className="w-full overflow-x-auto">
-        <div className="min-w-[300px] h-[300px] md:h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="count" fill="#2563eb" name="Agendamentos" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agendamentos</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {monthlyData.map((item, index) => (
-                <tr key={index}>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.month}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )
-  }
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .gte("data_agendamento", start.toISOString().split("T")[0])
+        .lte("data_agendamento", end.toISOString().split("T")[0])
+        .order("data_agendamento", { ascending: true })
 
-  const generateStatusDistributionReport = () => {
-    const statusData = processAppointmentsForStatus()
-    
-    return (
-      <div className="w-full overflow-x-auto">
-        <div className="min-w-[300px] h-[300px] md:h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <RechartsPieChart>
-              <Pie
-                data={statusData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={renderCustomizedLabel}
-                outerRadius={120}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {statusData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </RechartsPieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Porcentagem</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {statusData.map((item, index) => (
-                <tr key={index}>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[item.name as keyof typeof STATUS_COLORS] }} />
-                      {item.name}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.value}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                    {((item.value / statusData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )
-  }
+      if (error) throw error
 
-  const generateReport = () => {
-    switch (reportType) {
-      case "dailyAttendance":
-        return generateDailyAttendanceReport()
-      case "monthlyUtilization":
-        return generateMonthlyUtilizationReport()
-      case "statusDistribution":
-        return generateStatusDistributionReport()
-      default:
-        return (
-          <div className="text-center py-8 text-muted-foreground">
-            Selecione um tipo de relatório para visualizar
-          </div>
-        )
+      const csvContent = [
+        ["Data", "Horário", "Nome", "CPF", "Telefone", "Status"].join(","),
+        ...data.map((appointment: any) => [
+          format(new Date(appointment.data_agendamento), "dd/MM/yyyy"),
+          appointment.horario,
+          `"${appointment.nome}"`,
+          appointment.cpf,
+          appointment.telefone,
+          appointment.status
+        ].join(","))
+      ].join("\n")
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const link = document.createElement("a")
+      const url = URL.createObjectURL(blob)
+      link.setAttribute("href", url)
+      link.setAttribute("download", `relatorio_${format(start, "dd-MM-yyyy")}_a_${format(end, "dd-MM-yyyy")}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error("Erro ao exportar relatório:", error)
+      await Swal.fire({
+        title: "Erro!",
+        text: "Não foi possível exportar o relatório.",
+        icon: "error",
+        confirmButtonColor: "#15803d"
+      })
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-center bg-muted/20 p-4 rounded-lg">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-          {["dailyAttendance", "monthlyUtilization", "statusDistribution"].map((type) => (
-            <Button
-              key={type}
-              onClick={() => setReportType(type)}
-              className={`${
-                reportType === type
-                  ? BUTTON_COLORS[type as keyof typeof BUTTON_COLORS]
-                  : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-              } transition-all duration-200 font-medium w-full text-sm md:text-base py-2 px-3 md:px-4`}
-            >
-              {type === "dailyAttendance" && "Relatório Diário"}
-              {type === "monthlyUtilization" && "Relatório Mensal"}
-              {type === "statusDistribution" && "Distribuição"}
-            </Button>
-          ))}
-        </div>
-        {reportType && (
-          <Button 
-            onClick={exportToExcel}
-            className="bg-amber-500 hover:bg-amber-600 text-white transition-all duration-200 w-full md:w-auto"
-          >
-            Exportar Excel
-          </Button>
-        )}
-      </div>
+      <Card className="border-0 shadow-md">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Data Inicial</Label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <CalendarIcon className="h-4 w-4 text-gray-500" />
+                  </div>
+                  <Input
+                    type="date"
+                    value={startDate.toISOString().split("T")[0]}
+                    onChange={(e) => setStartDate(new Date(e.target.value))}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
-          {generateReport()}
-        </div>
-      </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Data Final</Label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <CalendarIcon className="h-4 w-4 text-gray-500" />
+                  </div>
+                  <Input
+                    type="date"
+                    value={endDate.toISOString().split("T")[0]}
+                    onChange={(e) => setEndDate(new Date(e.target.value))}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={exportToCSV}
+                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                disabled={isLoading || reportData.length === 0}
+              >
+                <Download className="w-4 h-4" />
+                Exportar CSV
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="status" className="w-full">
+        <TabsList className="w-full max-w-md mx-auto mb-6 grid grid-cols-3 h-auto p-1 bg-gray-100/80 rounded-lg border">
+          <TabsTrigger 
+            value="status" 
+            className="flex items-center gap-2 py-2 px-3 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm rounded-md transition-all"
+          >
+            <ChartPie className="w-4 h-4" />
+            Por Status
+          </TabsTrigger>
+          <TabsTrigger 
+            value="diario" 
+            className="flex items-center gap-2 py-2 px-3 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm rounded-md transition-all"
+          >
+            <BarChartIcon className="w-4 h-4" />
+            Diário
+          </TabsTrigger>
+          <TabsTrigger 
+            value="mensal" 
+            className="flex items-center gap-2 py-2 px-3 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm rounded-md transition-all"
+          >
+            <BarChartIcon className="w-4 h-4" />
+            Mensal
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="status">
+          <Card className="border-0 shadow-md">
+            <CardContent className="p-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-[300px] text-gray-500">
+                  <div className="animate-spin h-6 w-6 border-2 border-green-600 border-t-transparent rounded-full mr-2"></div>
+                  Gerando relatório...
+                </div>
+              ) : reportData.length === 0 ? (
+                <div className="text-center h-[300px] flex items-center justify-center text-gray-500">
+                  Nenhum dado disponível para o período selecionado
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RechartsPieChart>
+                      <Pie
+                        data={reportData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={({ name, value }) => `${name}: ${value}`}
+                      >
+                        {reportData.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS]} 
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+                    {reportData.map((item) => (
+                      <div
+                        key={item.name}
+                        className="bg-white rounded-lg border p-4 text-center"
+                      >
+                        <div className="text-sm font-medium text-gray-500">{item.name}</div>
+                        <div className="text-2xl font-bold mt-1" style={{ color: STATUS_COLORS[item.name as keyof typeof STATUS_COLORS] }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="diario">
+          <Card className="border-0 shadow-md">
+            <CardContent className="p-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-[300px] text-gray-500">
+                  <div className="animate-spin h-6 w-6 border-2 border-green-600 border-t-transparent rounded-full mr-2"></div>
+                  Gerando relatório...
+                </div>
+              ) : dailyData.length === 0 ? (
+                <div className="text-center h-[300px] flex items-center justify-center text-gray-500">
+                  Nenhum dado disponível para o período selecionado
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={dailyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="quantidade" name="Quantidade" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="mensal">
+          <Card className="border-0 shadow-md">
+            <CardContent className="p-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-[300px] text-gray-500">
+                  <div className="animate-spin h-6 w-6 border-2 border-green-600 border-t-transparent rounded-full mr-2"></div>
+                  Gerando relatório...
+                </div>
+              ) : monthlyData.length === 0 ? (
+                <div className="text-center h-[300px] flex items-center justify-center text-gray-500">
+                  Nenhum dado disponível para o período selecionado
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="quantidade" name="Quantidade" fill="#22c55e" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
