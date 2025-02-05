@@ -2,20 +2,22 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, Cell, CartesianGrid } from "recharts"
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, Cell, CartesianGrid, Pie, PieChart as RechartsPieChart } from "recharts"
 import type { Appointment } from "@/utils/types"
 import * as XLSX from 'xlsx'
+import { Calendar, BarChart as BarChartIcon, PieChart as PieChartIcon } from "lucide-react"
+import { FileSpreadsheet } from "lucide-react"
 
 interface ReportGeneratorProps {
   appointments: Appointment[]
 }
 
 const STATUS_COLORS = {
-  "Agendado": "#3b82f6", // Azul
-  "Confirmado": "#10b981", // Verde
-  "Cancelado": "#ef4444", // Vermelho
-  "Não Compareceu": "#f59e0b", // Amarelo
-  "Concluído": "#6366f1", // Índigo
+  "Agendado": "#2563eb",
+  "Confirmado": "#16a34a",
+  "Cancelado": "#dc2626",
+  "Concluído": "#9333ea",
+  "Não Compareceu": "#f59e0b"
 }
 
 const STATUS_ORDER = ["Agendado", "Confirmado", "Cancelado", "Não Compareceu", "Concluído"]
@@ -26,8 +28,87 @@ const BUTTON_COLORS = {
   statusDistribution: "bg-purple-500 hover:bg-purple-600 text-white",
 }
 
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  const RADIAN = Math.PI / 180
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+  const x = cx + radius * Math.cos(-midAngle * RADIAN)
+  const y = cy + radius * Math.sin(-midAngle * RADIAN)
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="white"
+      textAnchor={x > cx ? 'start' : 'end'}
+      dominantBaseline="central"
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  )
+}
+
 export function ReportGenerator({ appointments }: ReportGeneratorProps) {
   const [reportType, setReportType] = useState<string>("")
+
+  const processAppointmentsForDaily = () => {
+    const dailyCount = new Map<string, number>()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // Agrupa por dia
+    appointments.forEach(app => {
+      const date = new Date(app.data_agendamento)
+      date.setHours(0, 0, 0, 0)
+      const dateStr = date.toLocaleDateString('pt-BR')
+      dailyCount.set(dateStr, (dailyCount.get(dateStr) || 0) + 1)
+    })
+
+    // Converte para array e ordena por data
+    return Array.from(dailyCount.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  }
+
+  const processAppointmentsForMonthly = () => {
+    const monthlyCount = new Map<string, number>()
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ]
+
+    // Agrupa por mês
+    appointments.forEach(app => {
+      const date = new Date(app.data_agendamento)
+      const monthStr = months[date.getMonth()]
+      monthlyCount.set(monthStr, (monthlyCount.get(monthStr) || 0) + 1)
+    })
+
+    // Converte para array e mantém ordem dos meses
+    return months
+      .filter(month => monthlyCount.has(month))
+      .map(month => ({
+        month,
+        count: monthlyCount.get(month) || 0
+      }))
+  }
+
+  const processAppointmentsForStatus = () => {
+    const statusCount = new Map<string, number>()
+
+    // Conta por status
+    appointments.forEach(app => {
+      const status = app.status // Não converte para minúsculo
+      statusCount.set(status, (statusCount.get(status) || 0) + 1)
+    })
+
+    // Converte para array e ordena conforme STATUS_ORDER
+    return STATUS_ORDER
+      .map(status => ({
+        name: status,
+        value: statusCount.get(status) || 0
+      }))
+      .filter(item => item.value > 0) // Remove status sem agendamentos
+  }
 
   const exportToExcel = () => {
     if (!reportType) return
@@ -77,14 +158,7 @@ export function ReportGenerator({ appointments }: ReportGeneratorProps) {
         break
 
       case "statusDistribution":
-        const statusData = STATUS_ORDER.map(status => {
-          const count = appointments.filter(app => app.status === status).length
-          return {
-            Status: status,
-            Quantidade: count,
-            'Porcentagem': ((count / appointments.length) * 100).toFixed(2) + '%'
-          }
-        })
+        const statusData = processAppointmentsForStatus()
         dataToExport = statusData
         fileName = `relatorio_status_${new Date().toISOString().split('T')[0]}`
         break
@@ -105,263 +179,138 @@ export function ReportGenerator({ appointments }: ReportGeneratorProps) {
   }
 
   const generateDailyAttendanceReport = () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const dailyData = processAppointmentsForDaily()
     
-    // Ajusta para considerar a data sem o horário
-    const todayAppointments = appointments.filter((app) => {
-      const appDate = new Date(app.data_agendamento)
-      appDate.setHours(0, 0, 0, 0)
-      return appDate.getTime() === today.getTime()
-    })
-
-    const statusData = STATUS_ORDER.map(status => ({
-      name: status,
-      value: todayAppointments.filter(app => app.status === status).length
-    }))
-
-    const total = todayAppointments.length
-    const concluded = todayAppointments.filter(app => app.status === "Concluído").length
-    const noShow = todayAppointments.filter(app => app.status === "Não Compareceu").length
-    const canceled = todayAppointments.filter(app => app.status === "Cancelado").length
-    const scheduled = todayAppointments.filter(app => app.status === "Agendado").length
-
     return (
-      <Card className="shadow-lg">
-        <CardHeader className="border-b bg-muted/10">
-          <CardTitle>Relatório de Atendimentos - {today.toLocaleDateString('pt-BR', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={statusData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      <div className="w-full overflow-x-auto">
+        <div className="min-w-[300px] h-[300px] md:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dailyData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis dataKey="date" />
               <YAxis />
-              <Tooltip 
-                contentStyle={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #ddd' }}
-                cursor={{ fill: 'rgba(0,0,0,0.1)' }}
-              />
+              <Tooltip />
               <Legend />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {statusData.map((entry, index) => (
-                  <Cell key={index} fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS]} />
-                ))}
-              </Bar>
+              <Bar dataKey="count" fill="#16a34a" name="Atendimentos" />
             </BarChart>
           </ResponsiveContainer>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3 bg-muted/10 p-4 rounded-lg">
-              <h3 className="font-semibold text-lg border-b pb-2">Resumo do Dia</h3>
-              <p className="flex justify-between">
-                <span>Total de agendamentos:</span>
-                <span className="font-medium">{total}</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Agendados:</span>
-                <span className="font-medium text-blue-600">{scheduled}</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Concluídos:</span>
-                <span className="font-medium text-indigo-600">{concluded}</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Não compareceram:</span>
-                <span className="font-medium text-amber-600">{noShow}</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Cancelados:</span>
-                <span className="font-medium text-red-600">{canceled}</span>
-              </p>
-            </div>
-            <div className="space-y-3 bg-muted/10 p-4 rounded-lg">
-              <h3 className="font-semibold text-lg border-b pb-2">Estatísticas</h3>
-              <p className="flex justify-between">
-                <span>Taxa de comparecimento:</span>
-                <span className="font-medium">{total > 0 ? ((concluded / total) * 100).toFixed(2) : 0}%</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Taxa de ausência:</span>
-                <span className="font-medium">{total > 0 ? ((noShow / total) * 100).toFixed(2) : 0}%</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Taxa de cancelamento:</span>
-                <span className="font-medium">{total > 0 ? ((canceled / total) * 100).toFixed(2) : 0}%</span>
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Atendimentos</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {dailyData.map((item, index) => (
+                <tr key={index}>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.date}</td>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     )
   }
 
   const generateMonthlyUtilizationReport = () => {
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
-    const monthAppointments = appointments.filter((app) => {
-      const appDate = new Date(app.data_agendamento)
-      return appDate.getMonth() === currentMonth && appDate.getFullYear() === currentYear
-    })
-
-    const statusData = STATUS_ORDER.map(status => ({
-      name: status,
-      value: monthAppointments.filter(app => app.status === status).length
-    }))
-
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-    const workingDays = Array.from({ length: daysInMonth }, (_, i) => new Date(currentYear, currentMonth, i + 1))
-      .filter(date => date.getDay() !== 0 && date.getDay() !== 6).length
+    const monthlyData = processAppointmentsForMonthly()
     
-    const totalSlots = 20 * workingDays // 20 slots por dia útil
-    const utilizationRate = (monthAppointments.length / totalSlots) * 100
-
-    const concluded = monthAppointments.filter(app => app.status === "Concluído").length
-    const noShow = monthAppointments.filter(app => app.status === "Não Compareceu").length
-    const canceled = monthAppointments.filter(app => app.status === "Cancelado").length
-
     return (
-      <Card className="shadow-lg">
-        <CardHeader className="border-b bg-muted/10">
-          <CardTitle>Relatório Mensal - {new Date(currentYear, currentMonth).toLocaleDateString('pt-BR', { 
-            year: 'numeric', 
-            month: 'long'
-          })}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={statusData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      <div className="w-full overflow-x-auto">
+        <div className="min-w-[300px] h-[300px] md:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis dataKey="month" />
               <YAxis />
-              <Tooltip 
-                contentStyle={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #ddd' }}
-                cursor={{ fill: 'rgba(0,0,0,0.1)' }}
-              />
+              <Tooltip />
               <Legend />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {statusData.map((entry, index) => (
-                  <Cell key={index} fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS]} />
-                ))}
-              </Bar>
+              <Bar dataKey="count" fill="#2563eb" name="Agendamentos" />
             </BarChart>
           </ResponsiveContainer>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3 bg-muted/10 p-4 rounded-lg">
-              <h3 className="font-semibold text-lg border-b pb-2">Resumo do Mês</h3>
-              <p className="flex justify-between">
-                <span>Total de agendamentos:</span>
-                <span className="font-medium">{monthAppointments.length}</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Dias úteis no mês:</span>
-                <span className="font-medium">{workingDays}</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Capacidade total:</span>
-                <span className="font-medium">{totalSlots} atendimentos</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Taxa de utilização:</span>
-                <span className="font-medium">{utilizationRate.toFixed(2)}%</span>
-              </p>
-            </div>
-            <div className="space-y-3 bg-muted/10 p-4 rounded-lg">
-              <h3 className="font-semibold text-lg border-b pb-2">Estatísticas</h3>
-              <p className="flex justify-between">
-                <span>Média diária:</span>
-                <span className="font-medium">{(monthAppointments.length / workingDays).toFixed(1)} agendamentos</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Taxa de conclusão:</span>
-                <span className="font-medium">{monthAppointments.length > 0 ? ((concluded / monthAppointments.length) * 100).toFixed(2) : 0}%</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Taxa de ausência:</span>
-                <span className="font-medium">{monthAppointments.length > 0 ? ((noShow / monthAppointments.length) * 100).toFixed(2) : 0}%</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Taxa de cancelamento:</span>
-                <span className="font-medium">{monthAppointments.length > 0 ? ((canceled / monthAppointments.length) * 100).toFixed(2) : 0}%</span>
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agendamentos</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {monthlyData.map((item, index) => (
+                <tr key={index}>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.month}</td>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     )
   }
 
   const generateStatusDistributionReport = () => {
-    const statusData = STATUS_ORDER.map(status => ({
-      name: status,
-      value: appointments.filter(app => app.status === status).length
-    }))
-
-    const total = appointments.length
-    const byType = {
-      online: appointments.filter(app => app.tipo === "online").length,
-      presencial: appointments.filter(app => app.tipo === "presencial").length
-    }
-
+    const statusData = processAppointmentsForStatus()
+    
     return (
-      <Card className="shadow-lg">
-        <CardHeader className="border-b bg-muted/10">
-          <CardTitle>Distribuição Geral de Status</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={statusData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                contentStyle={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #ddd' }}
-                cursor={{ fill: 'rgba(0,0,0,0.1)' }}
-              />
-              <Legend />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+      <div className="w-full overflow-x-auto">
+        <div className="min-w-[300px] h-[300px] md:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <RechartsPieChart>
+              <Pie
+                data={statusData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={renderCustomizedLabel}
+                outerRadius={120}
+                fill="#8884d8"
+                dataKey="value"
+              >
                 {statusData.map((entry, index) => (
-                  <Cell key={index} fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS]} />
+                  <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS]} />
                 ))}
-              </Bar>
-            </BarChart>
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </RechartsPieChart>
           </ResponsiveContainer>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3 bg-muted/10 p-4 rounded-lg">
-              <h3 className="font-semibold text-lg border-b pb-2">Resumo Geral</h3>
-              <p className="flex justify-between">
-                <span>Total de agendamentos:</span>
-                <span className="font-medium">{total}</span>
-              </p>
-              {STATUS_ORDER.map(status => {
-                const count = statusData.find(d => d.name === status)?.value || 0
-                return (
-                  <p key={status} className="flex justify-between items-center">
-                    <span>{status}:</span>
-                    <span className="font-medium">
-                      {count} ({total > 0 ? ((count / total) * 100).toFixed(2) : 0}%)
-                    </span>
-                  </p>
-                )
-              })}
-            </div>
-            <div className="space-y-3 bg-muted/10 p-4 rounded-lg">
-              <h3 className="font-semibold text-lg border-b pb-2">Distribuição por Tipo</h3>
-              <p className="flex justify-between">
-                <span>Atendimentos Online:</span>
-                <span className="font-medium">{byType.online} ({total > 0 ? ((byType.online / total) * 100).toFixed(2) : 0}%)</span>
-              </p>
-              <p className="flex justify-between">
-                <span>Atendimentos Presenciais:</span>
-                <span className="font-medium">{byType.presencial} ({total > 0 ? ((byType.presencial / total) * 100).toFixed(2) : 0}%)</span>
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Porcentagem</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {statusData.map((item, index) => (
+                <tr key={index}>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[item.name as keyof typeof STATUS_COLORS] }} />
+                      {item.name}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.value}</td>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                    {((item.value / statusData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     )
   }
 
@@ -384,8 +333,8 @@ export function ReportGenerator({ appointments }: ReportGeneratorProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-4 items-center bg-muted/20 p-4 rounded-lg">
-        <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4 items-center bg-muted/20 p-4 rounded-lg">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
           {["dailyAttendance", "monthlyUtilization", "statusDistribution"].map((type) => (
             <Button
               key={type}
@@ -394,7 +343,7 @@ export function ReportGenerator({ appointments }: ReportGeneratorProps) {
                 reportType === type
                   ? BUTTON_COLORS[type as keyof typeof BUTTON_COLORS]
                   : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-              } transition-all duration-200 min-w-[160px] font-medium`}
+              } transition-all duration-200 font-medium w-full text-sm md:text-base py-2 px-3 md:px-4`}
             >
               {type === "dailyAttendance" && "Relatório Diário"}
               {type === "monthlyUtilization" && "Relatório Mensal"}
@@ -405,14 +354,18 @@ export function ReportGenerator({ appointments }: ReportGeneratorProps) {
         {reportType && (
           <Button 
             onClick={exportToExcel}
-            className="bg-amber-500 hover:bg-amber-600 text-white transition-all duration-200 ml-auto"
+            className="bg-amber-500 hover:bg-amber-600 text-white transition-all duration-200 w-full md:w-auto"
           >
             Exportar Excel
           </Button>
         )}
       </div>
 
-      <div>{generateReport()}</div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[800px]">
+          {generateReport()}
+        </div>
+      </div>
     </div>
   )
 }

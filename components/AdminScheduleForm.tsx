@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Calendar } from "@/components/ui/calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
-import { generateTimeSlots } from "@/utils/dateUtils"
+import { getAvailableTimeSlots } from "@/utils/dateUtils"
 import Swal from 'sweetalert2'
 import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 interface AdminScheduleFormProps {
   onSchedule: () => void
@@ -28,52 +29,30 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
   })
 
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
-  const [horariosOcupados, setHorariosOcupados] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (formData.dataAgendamento) {
-      fetchAvailableTimeSlots(formData.dataAgendamento)
+      loadAvailableTimeSlots(formData.dataAgendamento)
     }
   }, [formData.dataAgendamento])
 
-  const fetchAvailableTimeSlots = async (date: Date) => {
+  const loadAvailableTimeSlots = async (date: Date) => {
     try {
-      const dataAjustada = new Date(date)
-      dataAjustada.setHours(0, 0, 0, 0)
+      // Busca os horários disponíveis
+      const horarios = await getAvailableTimeSlots(date)
+      console.log('Horários disponíveis recebidos (admin):', horarios)
+      
+      // Atualiza o estado com os horários disponíveis
+      setAvailableTimeSlots(horarios)
 
-      // Busca todos os agendamentos para a data selecionada
-      const { data: agendamentos, error } = await supabase
-        .from("agendamentos")
-        .select("horario, status")
-        .eq("data_agendamento", dataAjustada.toISOString().split("T")[0])
-        .in("status", ["agendado", "confirmado"])
-
-      if (error) {
-        console.error("Erro ao buscar agendamentos:", error)
-        throw error
-      }
-
-      console.log("Agendamentos encontrados:", agendamentos) // Debug
-
-      // Cria um Set com os horários ocupados
-      const ocupados = new Set(agendamentos?.map(a => a.horario) || [])
-      console.log("Horários ocupados:", Array.from(ocupados)) // Debug
-      setHorariosOcupados(ocupados)
-
-      // Gera todos os horários possíveis para o dia
-      const todosHorarios = generateTimeSlots(dataAjustada)
-      console.log("Todos os horários:", todosHorarios) // Debug
-      setAvailableTimeSlots(todosHorarios)
-
-      // Limpa o horário selecionado se estiver ocupado
-      if (formData.horario && ocupados.has(formData.horario)) {
+      // Se o horário selecionado não está mais disponível, limpa a seleção
+      if (formData.horario && !horarios.includes(formData.horario)) {
         setFormData(prev => ({ ...prev, horario: "" }))
       }
     } catch (error) {
-      console.error("Erro ao buscar horários:", error)
+      console.error("Erro ao carregar horários:", error)
       setAvailableTimeSlots([])
-      setHorariosOcupados(new Set())
     }
   }
 
@@ -131,7 +110,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
           confirmButtonColor: '#15803d'
         })
         // Atualiza a lista de horários disponíveis
-        await fetchAvailableTimeSlots(dataAjustada)
+        await loadAvailableTimeSlots(dataAjustada)
         setIsSubmitting(false)
         return
       }
@@ -144,11 +123,11 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
           cpf: formData.cpf,
           data_nascimento: formData.dataNascimento,
           telefone: formData.telefone,
-          email: "admin@rg.com",
+          email: "agendamento@presencial.com",
           data_agendamento: dataAjustada.toISOString().split("T")[0],
           horario: formData.horario,
           tipo: formData.tipo,
-          status: "agendado"
+          status: "Agendado"
         })
 
       if (insertError) throw insertError
@@ -237,7 +216,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
         <CardDescription>Preencha os dados para agendar um novo atendimento</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="nome">Nome Completo</Label>
@@ -263,73 +242,85 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
               <Input id="telefone" name="telefone" value={formData.telefone} onChange={handleChange} required />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
               <Label>Data do Agendamento</Label>
-              <Calendar
-                mode="single"
-                selected={formData.dataAgendamento}
-                onSelect={handleDateSelect}
-                disabled={(date) => {
-                  const today = new Date()
-                  today.setHours(0, 0, 0, 0)
-                  return date < today || date.getDay() === 0 || date.getDay() === 6
-                }}
-                className="rounded-md border"
-              />
-              {formData.dataAgendamento && horariosOcupados.size > 0 && (
-                <div className="mt-4 p-3 bg-red-50 rounded-md border border-red-200">
-                  <h4 className="text-sm font-medium text-red-900 mb-2">
-                    Horários Ocupados:
+              <div className="p-2 border rounded-lg bg-gray-50/50">
+                <Calendar
+                  mode="single"
+                  selected={formData.dataAgendamento}
+                  onSelect={handleDateSelect}
+                  locale={ptBR}
+                  weekStartsOn={0}
+                  ISOWeek={false}
+                  disabled={(date) => {
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    return date < today || date.getDay() === 0 || date.getDay() === 6
+                  }}
+                  className="rounded-md border bg-white"
+                />
+              </div>
+              {formData.dataAgendamento && availableTimeSlots.length > 0 && (
+                <div className="mt-4 p-3 bg-green-50 rounded-md border border-green-200">
+                  <h4 className="text-sm font-medium text-green-900 mb-2">
+                    Horários Disponíveis:
                   </h4>
-                  <div className="space-y-1">
-                    {Array.from(horariosOcupados).sort().map((horario) => (
-                      <div key={horario} className="text-sm text-red-700">
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableTimeSlots.sort().map((horario) => (
+                      <div key={horario} className="text-sm text-green-700 flex items-center">
                         • {horario}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+              {formData.dataAgendamento && availableTimeSlots.length === 0 && (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                  <h4 className="text-sm font-medium text-yellow-900">
+                    Não há horários disponíveis para esta data.
+                  </h4>
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="horario">Horários</Label>
-              <Select
-                value={formData.horario}
-                onValueChange={(value) => handleSelectChange("horario", value)}
-                disabled={!formData.dataAgendamento}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    !formData.dataAgendamento 
-                      ? "Selecione uma data primeiro"
-                      : "Selecione um horário"
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTimeSlots.map((horario) => {
-                    const ocupado = horariosOcupados.has(horario)
-                    return (
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="horario">Horário</Label>
+                <Select
+                  value={formData.horario}
+                  onValueChange={(value) => handleSelectChange("horario", value)}
+                  disabled={!formData.dataAgendamento || availableTimeSlots.length === 0}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={
+                      !formData.dataAgendamento 
+                        ? "Selecione uma data primeiro"
+                        : availableTimeSlots.length === 0
+                        ? "Nenhum horário disponível"
+                        : "Selecione um horário"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTimeSlots.sort().map((horario) => (
                       <SelectItem 
                         key={horario} 
                         value={horario}
-                        disabled={ocupado}
-                        className={ocupado ? 'text-red-500 line-through' : ''}
                       >
-                        {horario} {ocupado ? '(Ocupado)' : ''}
+                        {horario}
                       </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <Button 
             type="submit" 
             className="w-full mt-6"
-            disabled={!formData.dataAgendamento || !formData.horario || isSubmitting || horariosOcupados.has(formData.horario)}
+            disabled={!formData.dataAgendamento || !formData.horario || isSubmitting}
           >
-            Agendar
+            {isSubmitting ? "Agendando..." : "Agendar"}
           </Button>
         </form>
       </CardContent>
