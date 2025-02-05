@@ -94,27 +94,58 @@ export function AppointmentList() {
     setFilteredAppointments(filtered)
   }
 
-  const handleStatusChange = () => {
-    fetchAppointments()
+  const handleStatusChange = async (appointmentId: string, newStatus: string) => {
+    try {
+      // Atualiza o estado local primeiro
+      const updatedAppointments = appointments.map(app => 
+        app.id === appointmentId ? { ...app, status: newStatus } : app
+      )
+      setAppointments(updatedAppointments)
+
+      // Atualiza a lista filtrada
+      const updatedFiltered = filteredAppointments.map(app => 
+        app.id === appointmentId ? { ...app, status: newStatus } : app
+      )
+      setFilteredAppointments(updatedFiltered)
+
+      // Atualiza no banco de dados em segundo plano
+      const { error } = await supabase
+        .from("agendamentos")
+        .update({ status: newStatus })
+        .eq("id", appointmentId)
+
+      if (error) throw error
+
+      showNotification("Status atualizado com sucesso!", "success")
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error)
+      showNotification("Erro ao atualizar status. Tente novamente.", "error")
+      
+      // Reverte as mudanças em caso de erro
+      fetchAppointments()
+    }
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-lg">Carregando...</div>
+        <div className="flex items-center gap-2">
+          <div className="animate-spin h-5 w-5 border-2 border-green-600 border-t-transparent rounded-full"></div>
+          <span className="text-gray-600">Carregando...</span>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
         <DatePicker
           selected={selectedDate}
           onSelect={handleDateChange}
-          className="w-full md:w-auto"
+          className="w-full lg:w-auto"
         />
-        <div className="flex-1">
+        <div className="flex-1 w-full lg:w-auto">
           <SearchAndFilter 
             onSearch={handleSearch} 
             onFilter={handleFilter}
@@ -122,16 +153,18 @@ export function AppointmentList() {
         </div>
       </div>
 
-      {filteredAppointments.length > 0 ? (
-        <AppointmentTable 
-          appointments={filteredAppointments}
-          onStatusChange={handleStatusChange}
-        />
-      ) : (
-        <div className="text-center py-8 text-gray-500">
-          Nenhum agendamento encontrado para a data selecionada.
-        </div>
-      )}
+      <div className="overflow-x-auto">
+        {filteredAppointments.length > 0 ? (
+          <AppointmentTable 
+            appointments={filteredAppointments}
+            onStatusChange={handleStatusChange}
+          />
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            Nenhum agendamento encontrado para a data selecionada.
+          </div>
+        )}
+      </div>
     </div>
   )
 } 
