@@ -43,12 +43,11 @@ export function AppointmentList() {
 
   const filterAppointmentsByDate = (appointmentsToFilter: Appointment[], date: Date) => {
     const selectedDateMidnight = new Date(date)
-    selectedDateMidnight.setHours(0, 0, 0, 0)
+    selectedDateMidnight.setHours(12, 0, 0, 0)
     
     const filtered = appointmentsToFilter.filter(app => {
-      const appDate = new Date(app.data_agendamento)
-      appDate.setHours(0, 0, 0, 0)
-      return appDate.getTime() === selectedDateMidnight.getTime()
+      const appDate = new Date(`${app.data_agendamento}T12:00:00`)
+      return appDate.toDateString() === selectedDateMidnight.toDateString()
     })
     setFilteredAppointments(filtered)
   }

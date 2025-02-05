@@ -89,14 +89,14 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
         return
       }
 
-      const dataAjustada = new Date(formData.dataAgendamento)
-      dataAjustada.setHours(0, 0, 0, 0)
+      const dataAjustada = new Date(formData.dataAgendamento!)
+      dataAjustada.setHours(12, 0, 0, 0) // Define para meio-dia para evitar problemas de fuso horário
 
       // Verifica se o horário ainda está disponível
       const { data: agendamentosExistentes, error: checkError } = await supabase
         .from("agendamentos")
         .select("horario")
-        .eq("data_agendamento", dataAjustada.toISOString().split("T")[0])
+        .eq("data_agendamento", format(dataAjustada, "yyyy-MM-dd"))
         .eq("status", "agendado")
         .eq("horario", formData.horario)
 
@@ -124,7 +124,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
           data_nascimento: formData.dataNascimento,
           telefone: formData.telefone,
           email: "agendamento@presencial.com",
-          data_agendamento: dataAjustada.toISOString().split("T")[0],
+          data_agendamento: format(dataAjustada, "yyyy-MM-dd"),
           horario: formData.horario,
           tipo: formData.tipo,
           status: "Agendado"
@@ -143,8 +143,9 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
         `🏥 Tipo: ${formData.tipo}\n\n` +
         `*Documentos necessários:*\n` +
         `- Certidão de Nascimento ou Casamento (original)\n` +
+        `- Comprovante de residência\n` +
         `- CPF\n\n` +
-        `⚠️ Importante:* Chegue com 30 minutos de antecedência, caso ultrapasse o horário perderá a vez.\n\n` +
+        `⚠️ *Importante:* Chegue com 30 minutos de antecedência, caso ultrapasse o horário perderá a vez.\n\n` +
         `Em caso de dúvidas, entre em contato conosco.`
 
       await Swal.fire({

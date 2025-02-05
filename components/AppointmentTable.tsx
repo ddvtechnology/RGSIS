@@ -84,7 +84,7 @@ export function AppointmentTable({ appointments, onStatusChange }: AppointmentTa
                   <TableCell className="font-medium">{appointment.nome}</TableCell>
                   <TableCell>{appointment.cpf}</TableCell>
                   <TableCell>
-                    {format(new Date(appointment.data_agendamento), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    {format(new Date(`${appointment.data_agendamento}T12:00:00`), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                   </TableCell>
                   <TableCell>{appointment.horario}</TableCell>
                   <TableCell className="capitalize">{appointment.tipo}</TableCell>

@@ -9,6 +9,7 @@ import { ptBR } from "@/utils/dateUtils"
 import { getAvailableTimeSlots } from "@/utils/dateUtils"
 import { supabase } from "@/lib/supabase"
 import Swal from "sweetalert2"
+import { format } from "date-fns"
 
 export function AgendamentoForm() {
   const [formData, setFormData] = useState({
@@ -71,13 +72,13 @@ export function AgendamentoForm() {
 
     try {
       const dataAjustada = new Date(formData.dataAgendamento!)
-      dataAjustada.setHours(0, 0, 0, 0)
+      dataAjustada.setHours(12, 0, 0, 0)
 
       // Verifica disponibilidade
       const { data: agendamentosExistentes, error: checkError } = await supabase
         .from("agendamentos")
         .select("horario")
-        .eq("data_agendamento", dataAjustada.toISOString().split("T")[0])
+        .eq("data_agendamento", format(dataAjustada, "yyyy-MM-dd"))
         .in("status", ["Agendado", "Confirmado"])
         .eq("horario", formData.horario)
 
@@ -103,7 +104,7 @@ export function AgendamentoForm() {
           data_nascimento: formData.dataNascimento,
           telefone: formData.telefone,
           email: "agendamento@online.com",
-          data_agendamento: dataAjustada.toISOString().split("T")[0],
+          data_agendamento: format(dataAjustada, "yyyy-MM-dd"),
           horario: formData.horario,
           tipo: "online",
           status: "Agendado"
@@ -111,13 +112,7 @@ export function AgendamentoForm() {
 
       if (insertError) throw insertError
 
-      const dataFormatada = formData.dataAgendamento 
-        ? formData.dataAgendamento.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          })
-        : ''
+      const dataFormatada = format(dataAjustada, "dd/MM/yyyy")
 
       const mensagem = `🗓️ *Agendamento RG - São Bento do Una*\n\n` +
         `Olá ${formData.nome},\n\n` +
@@ -127,6 +122,7 @@ export function AgendamentoForm() {
         `📍 Local: Secretaria de Assistência Social\n\n` +
         `*Documentos necessários:*\n` +
         `- Certidão de Nascimento ou Casamento (original)\n` +
+        `- Comprovante de residência\n` +
         `- CPF\n\n` +
         `⚠️ *Importante:* Chegue com 30 minutos de antecedência, caso ultrapasse o horário perderá a vez.\n\n` +
         `Em caso de dúvidas, entre em contato conosco.`
