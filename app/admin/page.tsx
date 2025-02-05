@@ -131,8 +131,15 @@ export default function AdminPage() {
           </CardHeader>
         </Card>
 
-        <Tabs defaultValue="agendamentos" className="w-full">
-          <TabsList className="w-full max-w-2xl mx-auto mb-6 grid grid-cols-3 h-auto p-1 bg-gray-100/80 rounded-lg border">
+        <Tabs defaultValue="dashboard" className="w-full">
+          <TabsList className="w-full max-w-2xl mx-auto mb-6 grid grid-cols-4 h-auto p-1 bg-gray-100/80 rounded-lg border">
+            <TabsTrigger 
+              value="dashboard" 
+              className="flex items-center gap-2 py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm rounded-md transition-all"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </TabsTrigger>
             <TabsTrigger 
               value="agendamentos" 
               className="flex items-center gap-2 py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm rounded-md transition-all"
@@ -155,6 +162,14 @@ export default function AdminPage() {
               Relatórios
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dashboard" className="mt-0">
+            <Card className="border-0 shadow-lg">
+              <CardContent className="p-6">
+                <Dashboard />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="agendamentos" className="mt-0">
             <Card className="border-0 shadow-lg">
