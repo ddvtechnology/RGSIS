@@ -122,7 +122,7 @@ export function AgendamentoForm() {
         `📍 Local: Secretaria de Assistência Social\n\n` +
         `*Documentos necessários:*\n` +
         `- Certidão de Nascimento ou Casamento (original)\n` +
-        `- RG antigo, se tiver\n` +
+        `- Comprovante de residência\n` +
         `- CPF\n\n` +
         `⚠️ *Importante:* Chegue com 30 minutos de antecedência, caso ultrapasse o horário perderá a vez.\n\n` +
         `Em caso de dúvidas, entre em contato conosco.`

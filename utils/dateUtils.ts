@@ -136,27 +136,25 @@ export async function getAvailableTimeSlots(date: Date) {
 }
 
 export function generateTimeSlots(date: Date) {
-  // Verifica se é sexta-feira (5)
-  const isSexta = date.getDay() === 5
-
-  // Define os horários base (garantindo o formato correto)
+  const isSexta = date.getDay() === 5;
   const horarios = [
     "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
     "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
     "14:00", "14:30", "15:00", "15:30"
-  ]
+  ];
 
-  // Se for sexta, retorna apenas os horários até 12:30
   if (isSexta) {
+    // Se for sexta-feira, remove o horário '12:30' e retorna somente horários até 12:00
     return horarios.filter(horario => {
-      const [hora, minuto] = horario.split(":")
-      const horaNum = parseInt(hora)
-      const minutoNum = parseInt(minuto)
-      return horaNum < 12 || (horaNum === 12 && minutoNum <= 30)
-    })
+      const [hora, minuto] = horario.split(":");
+      const horaNum = parseInt(hora, 10);
+      // Permite somente horários antes de 12 e o "12:00"
+      return horaNum < 12 || (horaNum === 12 && minuto === "00");
+    });
   }
 
-  return horarios
+  // Para os demais dias, retorna todos os horários, inclusive '12:30'
+  return horarios;
 }
 
 export function generateAvailableDates(startDate: Date, numberOfDays: number) {
