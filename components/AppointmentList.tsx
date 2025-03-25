@@ -7,12 +7,19 @@ import { AppointmentTable } from "@/components/AppointmentTable"
 import { supabase } from "@/lib/supabase"
 import type { Appointment } from "@/utils/types"
 import { useNotification } from "@/contexts/NotificationContext"
+import { Button } from "@/components/ui/button"
+import { Calendar, ListFilter } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function AppointmentList() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [filterByDate, setFilterByDate] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [typeFilter, setTypeFilter] = useState<string>("all")
   const { showNotification } = useNotification()
 
   const fetchAppointments = async () => {
@@ -27,7 +34,11 @@ export function AppointmentList() {
 
       if (data) {
         setAppointments(data)
-        filterAppointmentsByDate(data, selectedDate)
+        if (filterByDate) {
+          filterAppointmentsByDate(data, selectedDate)
+        } else {
+          applyFilters(data, searchTerm, statusFilter, typeFilter)
+        }
       }
     } catch (error) {
       console.error("Erro ao buscar agendamentos:", error)
@@ -41,6 +52,12 @@ export function AppointmentList() {
     fetchAppointments()
   }, [])
 
+  useEffect(() => {
+    if (filterByDate) {
+      filterAppointmentsByDate(appointments, selectedDate)
+    }
+  }, [selectedDate, filterByDate])
+
   const filterAppointmentsByDate = (appointmentsToFilter: Appointment[], date: Date) => {
     const selectedDateMidnight = new Date(date)
     selectedDateMidnight.setHours(12, 0, 0, 0)
@@ -49,48 +66,71 @@ export function AppointmentList() {
       const appDate = new Date(`${app.data_agendamento}T12:00:00`)
       return appDate.toDateString() === selectedDateMidnight.toDateString()
     })
+    
+    applyFilters(filtered, searchTerm, statusFilter, typeFilter)
+  }
+
+  const applyFilters = (appointmentsToFilter: Appointment[], search: string, status: string, type: string) => {
+    let filtered = [...appointmentsToFilter]
+    
+    // Aplicar filtro de busca
+    if (search) {
+      filtered = filtered.filter(
+        (app) => 
+          app.nome.toLowerCase().includes(search.toLowerCase()) || 
+          app.cpf.includes(search)
+      )
+    }
+    
+    // Aplicar filtro de status
+    if (status && status !== "all") {
+      filtered = filtered.filter((app) => app.status === status)
+    }
+    
+    // Aplicar filtro de tipo
+    if (type && type !== "all") {
+      filtered = filtered.filter((app) => app.tipo.toLowerCase() === type.toLowerCase())
+    }
+    
     setFilteredAppointments(filtered)
   }
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(date)
-      filterAppointmentsByDate(appointments, date)
     }
   }
 
-  const handleSearch = (searchTerm: string) => {
-    if (!searchTerm.trim()) {
+  const handleSearch = (term: string) => {
+    setSearchTerm(term)
+    
+    if (filterByDate) {
       filterAppointmentsByDate(appointments, selectedDate)
-      return
+    } else {
+      applyFilters(appointments, term, statusFilter, typeFilter)
     }
-
-    const filtered = filteredAppointments.filter(
-      (app) => 
-        app.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        app.cpf.includes(searchTerm)
-    )
-    setFilteredAppointments(filtered)
   }
 
   const handleFilter = (status: string, type: string) => {
-    let filtered = appointments.filter(app => {
-      const appDate = new Date(app.data_agendamento)
-      appDate.setHours(0, 0, 0, 0)
-      const selectedDateMidnight = new Date(selectedDate)
-      selectedDateMidnight.setHours(0, 0, 0, 0)
-      return appDate.getTime() === selectedDateMidnight.getTime()
-    })
+    setStatusFilter(status)
+    setTypeFilter(type)
     
-    if (status && status !== "all") {
-      filtered = filtered.filter((app) => app.status === status)
+    if (filterByDate) {
+      filterAppointmentsByDate(appointments, selectedDate)
+    } else {
+      applyFilters(appointments, searchTerm, status, type)
     }
+  }
+
+  const toggleFilterMode = () => {
+    const newFilterByDate = !filterByDate
+    setFilterByDate(newFilterByDate)
     
-    if (type && type !== "all") {
-      filtered = filtered.filter((app) => app.tipo.toLowerCase() === type.toLowerCase())
+    if (newFilterByDate) {
+      filterAppointmentsByDate(appointments, selectedDate)
+    } else {
+      applyFilters(appointments, searchTerm, statusFilter, typeFilter)
     }
-    
-    setFilteredAppointments(filtered)
   }
 
   const handleStatusChange = async (appointmentId: string, newStatus: string) => {
@@ -139,11 +179,40 @@ export function AppointmentList() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-        <DatePicker
-          selected={selectedDate}
-          onSelect={handleDateChange}
-          className="w-full lg:w-auto"
-        />
+        <div className="flex gap-2 items-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={toggleFilterMode}
+                  className={filterByDate ? "border-green-600 text-green-700" : "border-blue-600 text-blue-700"}
+                >
+                  {filterByDate ? <Calendar className="h-4 w-4" /> : <ListFilter className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{filterByDate ? "Filtrando por dia" : "Mostrando todos os agendamentos"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          {filterByDate && (
+            <DatePicker
+              selected={selectedDate}
+              onSelect={handleDateChange}
+              className="w-full lg:w-auto"
+            />
+          )}
+          
+          {!filterByDate && (
+            <div className="text-sm font-medium text-blue-700">
+              Mostrando todos os agendamentos
+            </div>
+          )}
+        </div>
+        
         <div className="flex-1 w-full lg:w-auto">
           <SearchAndFilter 
             onSearch={handleSearch} 
@@ -160,9 +229,15 @@ export function AppointmentList() {
           />
         ) : (
           <div className="text-center py-8 text-gray-500">
-            Nenhum agendamento encontrado para a data selecionada.
+            {filterByDate 
+              ? "Nenhum agendamento encontrado para a data selecionada." 
+              : "Nenhum agendamento encontrado com os filtros aplicados."}
           </div>
         )}
+      </div>
+      
+      <div className="text-right text-sm text-gray-500">
+        Total: {filteredAppointments.length} agendamento(s)
       </div>
     </div>
   )
