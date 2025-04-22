@@ -25,20 +25,39 @@ export function AppointmentList() {
   const fetchAppointments = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase
+      // Modificado para limitar o número de registros e usar paginação se necessário
+      const { data, error, count } = await supabase
         .from("agendamentos")
-        .select("*")
+        .select("*", { count: 'exact' })
         .order("data_agendamento", { ascending: true })
+        // Se precisar de paginação:
+        // .range(0, 999)  // Isso limita a 1000 registros por vez
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao buscar agendamentos:", error)
+        showNotification("Erro ao carregar agendamentos. Por favor, tente novamente.", "error")
+        return
+      }
 
-      if (data) {
-        setAppointments(data)
-        if (filterByDate) {
-          filterAppointmentsByDate(data, selectedDate)
-        } else {
-          applyFilters(data, searchTerm, statusFilter, typeFilter)
-        }
+      console.log("=== DEBUG CARREGAMENTO ===")
+      console.log("Total de agendamentos:", data?.length)
+      console.log("Contagem total no banco:", count)
+      if (data && data.length > 0) {
+        console.log("Exemplo de agendamento:", {
+          nome: data[0].nome,
+          data: data[0].data_agendamento,
+          tipo: typeof data[0].data_agendamento
+        })
+        console.log("Datas disponíveis (amostra):", data.slice(0, 5).map(app => app.data_agendamento))
+      }
+      console.log("=========================")
+      
+      setAppointments(data || [])
+      
+      if (filterByDate) {
+        filterAppointmentsByDate(data || [], selectedDate)
+      } else {
+        applyFilters(data || [], searchTerm, statusFilter, typeFilter)
       }
     } catch (error) {
       console.error("Erro ao buscar agendamentos:", error)
@@ -59,15 +78,53 @@ export function AppointmentList() {
   }, [selectedDate, filterByDate])
 
   const filterAppointmentsByDate = (appointmentsToFilter: Appointment[], date: Date) => {
-    const selectedDateMidnight = new Date(date)
-    selectedDateMidnight.setHours(12, 0, 0, 0)
+    // Formata a data selecionada para YYYY-MM-DD (mesmo formato que vem do banco)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const selectedDateStr = `${year}-${month}-${day}`
     
+    console.log("=== DEBUG FILTRO DE DATA ===")
+    console.log("Data selecionada:", selectedDateStr)
+    console.log("Total de agendamentos para filtrar:", appointmentsToFilter.length)
+    
+    // Criar um array separado para debug
+    const matchingAppointments = []
+    
+    // Primeiro passe para debugging antes de filtrar
+    for (const app of appointmentsToFilter) {
+      if (app.data_agendamento === selectedDateStr) {
+        matchingAppointments.push(app)
+      }
+    }
+    
+    console.log(`Agendamentos que devem corresponder à data ${selectedDateStr}:`, 
+      matchingAppointments.map(a => ({ nome: a.nome, data: a.data_agendamento })))
+    
+    // Agora fazer o filtro real
     const filtered = appointmentsToFilter.filter(app => {
-      const appDate = new Date(`${app.data_agendamento}T12:00:00`)
-      return appDate.toDateString() === selectedDateMidnight.toDateString()
+      const appDateStr = app.data_agendamento
+      
+      // Simplificando o log para não sobrecarregar o console
+      if (appDateStr === selectedDateStr) {
+        console.log(`Match encontrado: ${app.nome} (${appDateStr})`)
+      }
+      
+      return appDateStr === selectedDateStr
     })
     
-    applyFilters(filtered, searchTerm, statusFilter, typeFilter)
+    console.log(`Total de agendamentos encontrados para ${selectedDateStr}:`, filtered.length)
+    if (filtered.length === 0 && matchingAppointments.length > 0) {
+      console.error("ERRO: Há uma discrepância entre os agendamentos identificados e filtrados!")
+    }
+    
+    // Verificar se há dados válidos no banco para esta data
+    const dataExisteNoBanco = appointmentsToFilter.some(app => app.data_agendamento === selectedDateStr)
+    if (!dataExisteNoBanco) {
+      console.log(`Não existem agendamentos no banco para a data ${selectedDateStr}`)
+    }
+    
+    setFilteredAppointments(filtered)
   }
 
   const applyFilters = (appointmentsToFilter: Appointment[], search: string, status: string, type: string) => {
@@ -92,6 +149,7 @@ export function AppointmentList() {
       filtered = filtered.filter((app) => app.tipo.toLowerCase() === type.toLowerCase())
     }
     
+    console.log("Agendamentos após aplicar filtros:", filtered.length)
     setFilteredAppointments(filtered)
   }
 
@@ -132,6 +190,63 @@ export function AppointmentList() {
       applyFilters(appointments, searchTerm, statusFilter, typeFilter)
     }
   }
+
+  // Implementação da busca direta no banco para o dia específico
+  const loadAppointmentsForDate = async (date: Date) => {
+    setIsLoading(true)
+    
+    try {
+      // Formata a data para YYYY-MM-DD
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
+      
+      // Busca diretamente do banco apenas os registros para a data específica
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("data_agendamento", dateStr)
+        .order("horario", { ascending: true })
+      
+      if (error) {
+        console.error("Erro ao buscar agendamentos para data específica:", error)
+        showNotification("Erro ao carregar agendamentos para a data selecionada.", "error")
+        return
+      }
+      
+      console.log(`Agendamentos carregados diretamente para ${dateStr}:`, data?.length)
+      
+      // Aplicar filtros adicionais se necessário
+      let filtered = data || []
+      if (statusFilter !== "all") {
+        filtered = filtered.filter(app => app.status === statusFilter)
+      }
+      if (typeFilter !== "all") {
+        filtered = filtered.filter(app => app.tipo.toLowerCase() === typeFilter.toLowerCase())
+      }
+      if (searchTerm) {
+        filtered = filtered.filter(app => 
+          app.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          app.cpf.includes(searchTerm)
+        )
+      }
+      
+      setFilteredAppointments(filtered)
+    } catch (error) {
+      console.error("Erro ao carregar agendamentos específicos:", error)
+      showNotification("Erro ao buscar agendamentos para a data.", "error")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Modificar o useEffect para usar o novo método
+  useEffect(() => {
+    if (filterByDate) {
+      loadAppointmentsForDate(selectedDate)
+    }
+  }, [selectedDate, filterByDate])
 
   const handleStatusChange = async (appointmentId: string, newStatus: string) => {
     try {
@@ -201,7 +316,13 @@ export function AppointmentList() {
           {filterByDate && (
             <DatePicker
               selected={selectedDate}
-              onSelect={handleDateChange}
+              onSelect={(date) => {
+                handleDateChange(date);
+                // Focar na busca direta no banco quando a data mudar
+                if (date) {
+                  loadAppointmentsForDate(date);
+                }
+              }}
               className="w-full lg:w-auto"
             />
           )}
@@ -241,4 +362,4 @@ export function AppointmentList() {
       </div>
     </div>
   )
-} 
+}
