@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
 import Swal from "sweetalert2"
+import * as XLSX from "xlsx"
 
 const STATUS_COLORS = {
   "Agendado": "#3b82f6",
@@ -159,6 +160,176 @@ export function ReportGenerator() {
     }
   }
 
+  const exportToXLSX = async () => {
+    try {
+      const start = new Date(startDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .gte("data_agendamento", start.toISOString().split("T")[0])
+        .lte("data_agendamento", end.toISOString().split("T")[0])
+        .order("data_agendamento", { ascending: true })
+
+      if (error) throw error
+
+      // Monta os dados para a planilha
+      const worksheetData = [
+        ["Data", "Horário", "Nome", "CPF", "Telefone", "Status"],
+        ...data.map((appointment: any) => [
+          format(new Date(appointment.data_agendamento), "dd/MM/yyyy"),
+          appointment.horario,
+          appointment.nome,
+          appointment.cpf,
+          appointment.telefone,
+          appointment.status
+        ])
+      ]
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
+      // Ajusta largura das colunas para melhor impressão
+      worksheet["!cols"] = [
+        { wch: 12 }, // Data
+        { wch: 10 }, // Horário
+        { wch: 30 }, // Nome
+        { wch: 16 }, // CPF
+        { wch: 16 }, // Telefone
+        { wch: 12 }  // Status
+      ]
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório")
+      const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
+      const blob = new Blob([xlsxBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      const link = document.createElement("a")
+      const url = URL.createObjectURL(blob)
+      link.setAttribute("href", url)
+      link.setAttribute("download", `relatorio_${format(start, "dd-MM-yyyy")}_a_${format(end, "dd-MM-yyyy")}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error("Erro ao exportar relatório XLSX:", error)
+      await Swal.fire({
+        title: "Erro!",
+        text: "Não foi possível exportar o relatório em XLSX.",
+        icon: "error",
+        confirmButtonColor: "#15803d"
+      })
+    }
+  }
+
+  const exportToPDF = async () => {
+    try {
+      const start = new Date(startDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .gte("data_agendamento", start.toISOString().split("T")[0])
+        .lte("data_agendamento", end.toISOString().split("T")[0])
+        .order("data_agendamento", { ascending: true })
+
+      if (error) throw error
+
+      // Importação dinâmica para evitar problemas de SSR
+      const { default: jsPDF } = await import('jspdf')
+      await import('jspdf-autotable')
+      
+      const doc = new jsPDF()
+      
+      // Título do relatório
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.text("Relatório de Agendamentos", 105, 20, { align: "center" })
+      
+      // Período do relatório
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "normal")
+      doc.text(`Período: ${format(start, "dd/MM/yyyy")} a ${format(end, "dd/MM/yyyy")}`, 105, 30, { align: "center" })
+      
+      // Data de geração
+      doc.setFontSize(10)
+      doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy às HH:mm")}`, 105, 40, { align: "center" })
+      
+      // Cabeçalho da tabela
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "bold")
+      doc.text("Data", 20, 60)
+      doc.text("Horário", 45, 60)
+      doc.text("Nome", 70, 60)
+      doc.text("CPF", 120, 60)
+      doc.text("Telefone", 150, 60)
+      doc.text("Status", 180, 60)
+      
+      // Dados da tabela
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      let yPos = 70
+      
+      data.forEach((appointment: any, index: number) => {
+        if (yPos > 250) {
+          doc.addPage()
+          yPos = 20
+        }
+        
+        doc.text(format(new Date(appointment.data_agendamento), "dd/MM/yyyy"), 20, yPos)
+        doc.text(appointment.horario, 45, yPos)
+        doc.text(appointment.nome.substring(0, 20), 70, yPos)
+        doc.text(appointment.cpf, 120, yPos)
+        doc.text(appointment.telefone, 150, yPos)
+        doc.text(appointment.status, 180, yPos)
+        
+        yPos += 8
+      })
+      
+      // Resumo no final
+      const totalAgendamentos = data.length
+      const statusCount = data.reduce((acc: { [key: string]: number }, curr) => {
+        acc[curr.status] = (acc[curr.status] || 0) + 1
+        return acc
+      }, {})
+      
+      yPos += 10
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text("Resumo:", 20, yPos)
+      
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "normal")
+      yPos += 10
+      doc.text(`Total de agendamentos: ${totalAgendamentos}`, 20, yPos)
+      
+      Object.entries(statusCount).forEach(([status, count]) => {
+        yPos += 7
+        doc.text(`${status}: ${count}`, 20, yPos)
+      })
+      
+      // Salva o PDF
+      doc.save(`relatorio_${format(start, "dd-MM-yyyy")}_a_${format(end, "dd-MM-yyyy")}.pdf`)
+      
+      await Swal.fire({
+        title: "Sucesso!",
+        text: "Relatório PDF gerado com sucesso!",
+        icon: "success",
+        confirmButtonColor: "#15803d"
+      })
+    } catch (error) {
+      console.error("Erro ao exportar relatório PDF:", error)
+      await Swal.fire({
+        title: "Erro!",
+        text: "Não foi possível exportar o relatório em PDF. Verifique o console para mais detalhes.",
+        icon: "error",
+        confirmButtonColor: "#15803d"
+      })
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-md">
@@ -194,7 +365,7 @@ export function ReportGenerator() {
                   />
                 </div>
               </div>
-
+{/* 
               <Button
                 onClick={exportToCSV}
                 className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
@@ -202,6 +373,22 @@ export function ReportGenerator() {
               >
                 <Download className="w-4 h-4" />
                 Exportar CSV
+              </Button>  */}
+              <Button
+                onClick={exportToXLSX}
+                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                disabled={isLoading || reportData.length === 0}
+              >
+                <Download className="w-4 h-4" />
+                Exportar XLSX
+              </Button>
+              <Button
+                onClick={exportToPDF}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                disabled={isLoading || reportData.length === 0}
+              >
+                <Download className="w-4 h-4" />
+                Exportar PDF
               </Button>
             </div>
           </div>
