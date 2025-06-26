@@ -254,8 +254,10 @@ export function ReportGenerator() {
       doc.text(`Período: ${format(start, "dd/MM/yyyy")} a ${format(end, "dd/MM/yyyy")}`, 105, 30, { align: "center" })
       
       // Data de geração
+      const now = new Date();
+      const dataGeracao = `${format(now, "dd/MM/yyyy")} às ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       doc.setFontSize(10)
-      doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy às HH:mm")}`, 105, 40, { align: "center" })
+      doc.text(`Gerado em: ${dataGeracao}`, 105, 40, { align: "center" })
       
       // Cabeçalho da tabela
       doc.setFontSize(10)
