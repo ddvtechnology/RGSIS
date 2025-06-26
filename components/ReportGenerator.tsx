@@ -380,7 +380,7 @@ export function ReportGenerator() {
                 disabled={isLoading || reportData.length === 0}
               >
                 <Download className="w-4 h-4" />
-                Exportar XLSX
+                Exportar Excel
               </Button>
               <Button
                 onClick={exportToPDF}
