@@ -262,32 +262,42 @@ export function ReportGenerator() {
       // Cabeçalho da tabela
       doc.setFontSize(10)
       doc.setFont("helvetica", "bold")
-      doc.text("Data", 20, 60)
-      doc.text("Horário", 45, 60)
-      doc.text("Nome", 70, 60)
-      doc.text("CPF", 120, 60)
-      doc.text("Telefone", 150, 60)
-      doc.text("Status", 180, 60)
-      
+      // Ajuste das posições das colunas para margens menores
+      const colData = 10;
+      const colHorario = 35;
+      const colNome = 60;
+      const colCPF = 120;
+      const colTelefone = 150;
+      const colStatus = 180;
+      doc.text("Data", colData, 60)
+      doc.text("Horário", colHorario, 60)
+      doc.text("Nome", colNome, 60)
+      doc.text("CPF", colCPF, 60)
+      doc.text("Telefone", colTelefone, 60)
+      doc.text("Status", colStatus, 60)
+
       // Dados da tabela
       doc.setFontSize(8)
       doc.setFont("helvetica", "normal")
       let yPos = 70
+      const nomeMaxWidth = colCPF - colNome - 2; // espaço disponível para o nome
+      const lineHeight = 8;
       
       data.forEach((appointment: any, index: number) => {
-        if (yPos > 250) {
+        // Quebra o nome em múltiplas linhas se necessário
+        const nomeLines = doc.splitTextToSize(appointment.nome, nomeMaxWidth);
+        const rowHeight = Math.max(lineHeight, nomeLines.length * lineHeight);
+        if (yPos + rowHeight > 280) {
           doc.addPage()
           yPos = 20
         }
-        
-        doc.text(format(new Date(appointment.data_agendamento), "dd/MM/yyyy"), 20, yPos)
-        doc.text(appointment.horario, 45, yPos)
-        doc.text(appointment.nome.substring(0, 20), 70, yPos)
-        doc.text(appointment.cpf, 120, yPos)
-        doc.text(appointment.telefone, 150, yPos)
-        doc.text(appointment.status, 180, yPos)
-        
-        yPos += 8
+        doc.text(format(new Date(appointment.data_agendamento), "dd/MM/yyyy"), colData, yPos)
+        doc.text(appointment.horario, colHorario, yPos)
+        doc.text(nomeLines, colNome, yPos)
+        doc.text(appointment.cpf, colCPF, yPos)
+        doc.text(appointment.telefone, colTelefone, yPos)
+        doc.text(appointment.status, colStatus, yPos)
+        yPos += rowHeight;
       })
       
       // Resumo no final
