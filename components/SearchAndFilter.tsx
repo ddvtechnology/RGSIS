@@ -15,26 +15,28 @@ import { Search } from "lucide-react"
 interface SearchAndFilterProps {
   onSearch: (term: string) => void
   onFilter: (status: string, type: string) => void
+  searchTerm?: string
+  statusFilter?: string
+  typeFilter?: string
 }
 
-export function SearchAndFilter({ onSearch, onFilter }: SearchAndFilterProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
-
+export function SearchAndFilter({ 
+  onSearch, 
+  onFilter, 
+  searchTerm = "", 
+  statusFilter = "all", 
+  typeFilter = "all" 
+}: SearchAndFilterProps) {
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
-    setSearchTerm(value)
     onSearch(value)
   }
 
   const handleStatusChange = (value: string) => {
-    setStatusFilter(value)
     onFilter(value, typeFilter)
   }
 
   const handleTypeChange = (value: string) => {
-    setTypeFilter(value)
     onFilter(statusFilter, value)
   }
 

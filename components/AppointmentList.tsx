@@ -53,12 +53,7 @@ export function AppointmentList() {
       console.log("=========================")
       
       setAppointments(data || [])
-      
-      if (filterByDate) {
-        filterAppointmentsByDate(data || [], selectedDate)
-      } else {
-        applyFilters(data || [], searchTerm, statusFilter, typeFilter)
-      }
+      // A função applyAllFilters será chamada automaticamente pelo useEffect
     } catch (error) {
       console.error("Erro ao buscar agendamentos:", error)
       showNotification("Erro ao carregar agendamentos. Por favor, tente novamente.", "error")
@@ -72,85 +67,72 @@ export function AppointmentList() {
   }, [])
 
   useEffect(() => {
-    if (filterByDate) {
-      filterAppointmentsByDate(appointments, selectedDate)
+    if (appointments.length > 0) {
+      applyAllFilters(appointments)
     }
-  }, [selectedDate, filterByDate])
+  }, [selectedDate, filterByDate, appointments, searchTerm, statusFilter, typeFilter])
 
-  const filterAppointmentsByDate = (appointmentsToFilter: Appointment[], date: Date) => {
-    // Formata a data selecionada para YYYY-MM-DD (mesmo formato que vem do banco)
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const selectedDateStr = `${year}-${month}-${day}`
-    
-    console.log("=== DEBUG FILTRO DE DATA ===")
-    console.log("Data selecionada:", selectedDateStr)
-    console.log("Total de agendamentos para filtrar:", appointmentsToFilter.length)
-    
-    // Criar um array separado para debug
-    const matchingAppointments = []
-    
-    // Primeiro passe para debugging antes de filtrar
-    for (const app of appointmentsToFilter) {
-      if (app.data_agendamento === selectedDateStr) {
-        matchingAppointments.push(app)
-      }
-    }
-    
-    console.log(`Agendamentos que devem corresponder à data ${selectedDateStr}:`, 
-      matchingAppointments.map(a => ({ nome: a.nome, data: a.data_agendamento })))
-    
-    // Agora fazer o filtro real
-    const filtered = appointmentsToFilter.filter(app => {
-      const appDateStr = app.data_agendamento
-      
-      // Simplificando o log para não sobrecarregar o console
-      if (appDateStr === selectedDateStr) {
-        console.log(`Match encontrado: ${app.nome} (${appDateStr})`)
-      }
-      
-      return appDateStr === selectedDateStr
-    })
-    
-    console.log(`Total de agendamentos encontrados para ${selectedDateStr}:`, filtered.length)
-    if (filtered.length === 0 && matchingAppointments.length > 0) {
-      console.error("ERRO: Há uma discrepância entre os agendamentos identificados e filtrados!")
-    }
-    
-    // Verificar se há dados válidos no banco para esta data
-    const dataExisteNoBanco = appointmentsToFilter.some(app => app.data_agendamento === selectedDateStr)
-    if (!dataExisteNoBanco) {
-      console.log(`Não existem agendamentos no banco para a data ${selectedDateStr}`)
-    }
-    
-    setFilteredAppointments(filtered)
-  }
-
-  const applyFilters = (appointmentsToFilter: Appointment[], search: string, status: string, type: string) => {
+  // Função unificada para aplicar todos os filtros
+  const applyAllFilters = (appointmentsToFilter: Appointment[]) => {
     let filtered = [...appointmentsToFilter]
     
+    console.log("=== DEBUG FILTROS UNIFICADOS ===")
+    console.log("Total de agendamentos:", appointmentsToFilter.length)
+    console.log("Modo filtro por data:", filterByDate)
+    console.log("Termo de pesquisa:", searchTerm)
+    console.log("Filtro de status:", statusFilter)
+    console.log("Filtro de tipo:", typeFilter)
+    
+    // Se estiver no modo filtro por data, aplicar filtro de data primeiro
+    if (filterByDate) {
+      const year = selectedDate.getFullYear()
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
+      const day = String(selectedDate.getDate()).padStart(2, '0')
+      const selectedDateStr = `${year}-${month}-${day}`
+      
+      filtered = filtered.filter(app => {
+        return app.data_agendamento === selectedDateStr
+      })
+      console.log(`Após filtro de data ${selectedDateStr}:`, filtered.length)
+    }
+    
     // Aplicar filtro de busca
-    if (search) {
+    if (searchTerm && searchTerm.trim()) {
       filtered = filtered.filter(
         (app) => 
-          app.nome.toLowerCase().includes(search.toLowerCase()) || 
-          app.cpf.includes(search)
+          app.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          app.cpf.includes(searchTerm)
       )
+      console.log(`Após filtro de pesquisa "${searchTerm}":`, filtered.length)
     }
     
     // Aplicar filtro de status
-    if (status && status !== "all") {
-      filtered = filtered.filter((app) => app.status === status)
+    if (statusFilter && statusFilter !== "all") {
+      filtered = filtered.filter((app) => app.status === statusFilter)
+      console.log(`Após filtro de status "${statusFilter}":`, filtered.length)
     }
     
     // Aplicar filtro de tipo
-    if (type && type !== "all") {
-      filtered = filtered.filter((app) => app.tipo.toLowerCase() === type.toLowerCase())
+    if (typeFilter && typeFilter !== "all") {
+      filtered = filtered.filter((app) => app.tipo.toLowerCase() === typeFilter.toLowerCase())
+      console.log(`Após filtro de tipo "${typeFilter}":`, filtered.length)
     }
     
-    console.log("Agendamentos após aplicar filtros:", filtered.length)
+    console.log(`Total final após todos os filtros:`, filtered.length)
     setFilteredAppointments(filtered)
+  }
+
+  // Função para compatibilidade com código existente
+  const filterAppointmentsByDate = (appointmentsToFilter: Appointment[], date: Date, search?: string, status?: string, type?: string) => {
+    applyAllFilters(appointmentsToFilter)
+  }
+
+  const applyFilters = (appointmentsToFilter: Appointment[], search: string, status: string, type: string) => {
+    // Atualizar os estados e usar a função unificada
+    setSearchTerm(search)
+    setStatusFilter(status)
+    setTypeFilter(type)
+    applyAllFilters(appointmentsToFilter)
   }
 
   const handleDateChange = (date: Date | undefined) => {
@@ -161,34 +143,19 @@ export function AppointmentList() {
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
-    
-    if (filterByDate) {
-      filterAppointmentsByDate(appointments, selectedDate)
-    } else {
-      applyFilters(appointments, term, statusFilter, typeFilter)
-    }
+    applyAllFilters(appointments)
   }
 
   const handleFilter = (status: string, type: string) => {
     setStatusFilter(status)
     setTypeFilter(type)
-    
-    if (filterByDate) {
-      filterAppointmentsByDate(appointments, selectedDate)
-    } else {
-      applyFilters(appointments, searchTerm, status, type)
-    }
+    applyAllFilters(appointments)
   }
 
   const toggleFilterMode = () => {
     const newFilterByDate = !filterByDate
     setFilterByDate(newFilterByDate)
-    
-    if (newFilterByDate) {
-      filterAppointmentsByDate(appointments, selectedDate)
-    } else {
-      applyFilters(appointments, searchTerm, statusFilter, typeFilter)
-    }
+    applyAllFilters(appointments)
   }
 
   // Implementação da busca direta no banco para o dia específico
@@ -338,6 +305,9 @@ export function AppointmentList() {
           <SearchAndFilter 
             onSearch={handleSearch} 
             onFilter={handleFilter}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            typeFilter={typeFilter}
           />
         </div>
       </div>
