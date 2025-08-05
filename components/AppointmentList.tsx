@@ -1,239 +1,119 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { DatePicker } from "@/components/ui/date-picker"
-import { SearchAndFilter } from "@/components/SearchAndFilter"
-import { AppointmentTable } from "@/components/AppointmentTable"
-import { supabase } from "@/lib/supabase"
-import type { Appointment } from "@/utils/types"
-import { useNotification } from "@/contexts/NotificationContext"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Calendar, ListFilter } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { RefreshCw, Search } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import type { Appointment, AppointmentStatus } from "@/utils/types"
+import { useNotification } from "@/contexts/NotificationContext"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { MoreHorizontal, CheckCircle, XCircle, Clock, Ban } from "lucide-react"
+
+const statusConfig = {
+  "Agendado": { label: "Agendado", color: "bg-blue-500", Icon: Clock },
+  "Concluído": { label: "Concluído", color: "bg-green-500", Icon: CheckCircle },
+  "Não Compareceu": { label: "Não Compareceu", color: "bg-yellow-500", Icon: XCircle },
+  "Cancelado": { label: "Cancelado", color: "bg-red-500", Icon: Ban },
+}
 
 export function AppointmentList() {
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([])
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([])
+  const [displayAppointments, setDisplayAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [filterByDate, setFilterByDate] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
   const { showNotification } = useNotification()
 
-  const fetchAppointments = async () => {
+  // Carregar agendamentos
+  const loadAppointments = async () => {
     setIsLoading(true)
     try {
-      // Buscar TODOS os agendamentos sem filtro de data
-      const { data, error, count } = await supabase
-        .from("agendamentos")
-        .select("*", { count: 'exact' })
-        .order("data_agendamento", { ascending: true })
-        .order("horario", { ascending: true })
-
-      if (error) {
-        console.error("Erro ao buscar agendamentos:", error)
-        showNotification("Erro ao carregar agendamentos. Por favor, tente novamente.", "error")
-        return
-      }
-
-      console.log("=== DEBUG CARREGAMENTO ===")
-      console.log("Total de agendamentos:", data?.length)
-      console.log("Contagem total no banco:", count)
-      if (data && data.length > 0) {
-        console.log("Exemplo de agendamento:", {
-          nome: data[0].nome,
-          data: data[0].data_agendamento,
-          tipo: typeof data[0].data_agendamento
-        })
-        console.log("Datas disponíveis (amostra):", data.slice(0, 5).map(app => app.data_agendamento))
-      }
-      console.log("=========================")
-      
-      setAppointments(data || [])
-      // A função applyAllFilters será chamada automaticamente pelo useEffect
-    } catch (error) {
-      console.error("Erro ao buscar agendamentos:", error)
-      showNotification("Erro ao carregar agendamentos. Por favor, tente novamente.", "error")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchAppointments()
-  }, [])
-
-  useEffect(() => {
-    if (appointments.length > 0) {
-      applyAllFilters(appointments)
-    }
-  }, [selectedDate, filterByDate, appointments, searchTerm, statusFilter, typeFilter])
-
-  // Função unificada para aplicar todos os filtros
-  const applyAllFilters = (appointmentsToFilter: Appointment[]) => {
-    let filtered = [...appointmentsToFilter]
-    
-    console.log("=== DEBUG FILTROS UNIFICADOS ===")
-    console.log("Total de agendamentos:", appointmentsToFilter.length)
-    console.log("Modo filtro por data:", filterByDate)
-    console.log("Termo de pesquisa:", searchTerm)
-    console.log("Filtro de status:", statusFilter)
-    console.log("Filtro de tipo:", typeFilter)
-    
-    // PRIORIDADE: Se há termo de pesquisa, buscar em TODOS os agendamentos
-    const hasSearchTerm = searchTerm && searchTerm.trim()
-    
-    if (hasSearchTerm) {
-      // PESQUISA GLOBAL: Ignorar filtro de data quando há pesquisa
-      console.log("🔍 PESQUISA GLOBAL ATIVA - Buscando em todos os agendamentos")
-      filtered = filtered.filter(
-        (app) => 
-          app.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          app.cpf.includes(searchTerm)
-      )
-      console.log(`Após pesquisa global "${searchTerm}":`, filtered.length)
-    } else {
-      // SEM PESQUISA: Aplicar filtro de data apenas se não houver pesquisa e estiver no modo filtro por data
-      if (filterByDate) {
-        const year = selectedDate.getFullYear()
-        const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
-        const day = String(selectedDate.getDate()).padStart(2, '0')
-        const selectedDateStr = `${year}-${month}-${day}`
-        
-        filtered = filtered.filter(app => {
-          return app.data_agendamento === selectedDateStr
-        })
-        console.log(`Após filtro de data específica ${selectedDateStr}:`, filtered.length)
-      }
-    }
-    
-    // Aplicar filtro de status
-    if (statusFilter && statusFilter !== "all") {
-      filtered = filtered.filter((app) => app.status === statusFilter)
-      console.log(`Após filtro de status "${statusFilter}":`, filtered.length)
-    }
-    
-    // Aplicar filtro de tipo
-    if (typeFilter && typeFilter !== "all") {
-      filtered = filtered.filter((app) => app.tipo.toLowerCase() === typeFilter.toLowerCase())
-      console.log(`Após filtro de tipo "${typeFilter}":`, filtered.length)
-    }
-    
-    console.log(`Total final após todos os filtros:`, filtered.length)
-    setFilteredAppointments(filtered)
-  }
-
-  // Função para compatibilidade com código existente
-  const filterAppointmentsByDate = (appointmentsToFilter: Appointment[], date: Date, search?: string, status?: string, type?: string) => {
-    applyAllFilters(appointmentsToFilter)
-  }
-
-  const applyFilters = (appointmentsToFilter: Appointment[], search: string, status: string, type: string) => {
-    // Atualizar os estados e usar a função unificada
-    setSearchTerm(search)
-    setStatusFilter(status)
-    setTypeFilter(type)
-    applyAllFilters(appointmentsToFilter)
-  }
-
-  const handleDateChange = (date: Date | undefined) => {
-    if (date) {
-      setSelectedDate(date)
-    }
-  }
-
-  const handleSearch = (term: string) => {
-    setSearchTerm(term)
-    applyAllFilters(appointments)
-  }
-
-  const handleFilter = (status: string, type: string) => {
-    setStatusFilter(status)
-    setTypeFilter(type)
-    applyAllFilters(appointments)
-  }
-
-  const toggleFilterMode = () => {
-    const newFilterByDate = !filterByDate
-    setFilterByDate(newFilterByDate)
-    applyAllFilters(appointments)
-  }
-
-  // Implementação da busca direta no banco para o dia específico
-  const loadAppointmentsForDate = async (date: Date) => {
-    setIsLoading(true)
-    
-    try {
-      // Formata a data para YYYY-MM-DD
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const dateStr = `${year}-${month}-${day}`
-      
-      // Busca diretamente do banco apenas os registros para a data específica
-      // REMOVIDO: filtro que impedia buscar datas passadas
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("data_agendamento", dateStr)
+        .order("data_agendamento", { ascending: false })
         .order("horario", { ascending: true })
-      
-      if (error) {
-        console.error("Erro ao buscar agendamentos para data específica:", error)
-        showNotification("Erro ao carregar agendamentos para a data selecionada.", "error")
-        return
-      }
-      
-      console.log(`Agendamentos carregados diretamente para ${dateStr}:`, data?.length)
-      
-      // Aplicar filtros adicionais se necessário
-      let filtered = data || []
-      if (statusFilter !== "all") {
-        filtered = filtered.filter(app => app.status === statusFilter)
-      }
-      if (typeFilter !== "all") {
-        filtered = filtered.filter(app => app.tipo.toLowerCase() === typeFilter.toLowerCase())
-      }
-      if (searchTerm) {
-        filtered = filtered.filter(app => 
-          app.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          app.cpf.includes(searchTerm)
-        )
-      }
-      
-      setFilteredAppointments(filtered)
+
+      if (error) throw error
+
+      const appointments = (data as Appointment[]) || []
+      setAllAppointments(appointments)
+      setDisplayAppointments(appointments)
     } catch (error) {
-      console.error("Erro ao carregar agendamentos específicos:", error)
-      showNotification("Erro ao buscar agendamentos para a data.", "error")
+      console.error("Erro ao carregar agendamentos:", error)
+      showNotification("Erro ao carregar agendamentos", "error")
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Modificar o useEffect para usar o novo método apenas quando não há pesquisa ativa
-  useEffect(() => {
-    if (filterByDate && !(searchTerm && searchTerm.trim())) {
-      loadAppointmentsForDate(selectedDate)
+  // Pesquisar agendamentos por NOME EXATO ou CPF
+  const handleSearch = (value: string) => {
+    setSearchTerm(value)
+    
+    if (!value.trim()) {
+      setDisplayAppointments(allAppointments)
+      return
     }
-  }, [selectedDate, filterByDate, searchTerm])
 
-  const handleStatusChange = async (appointmentId: string, newStatus: string) => {
+    const search = value.trim() // Mantém maiúsculas/minúsculas originais
+    const searchLower = search.toLowerCase()
+    
+    const filtered = allAppointments.filter(app => {
+      const nomeCompleto = app.nome.trim()
+      const nomeCompletoLower = nomeCompleto.toLowerCase()
+      const partesNome = nomeCompleto.split(' ')
+      
+      // 1. Nome completo EXATO (case-insensitive)
+      const nomeCompletoExato = nomeCompletoLower === searchLower
+      
+      // 2. Primeiro nome EXATO (case-insensitive)
+      const primeiroNomeExato = partesNome[0] && partesNome[0].toLowerCase() === searchLower
+      
+      // 3. Qualquer nome do meio EXATO (case-insensitive)
+      const qualquerNomeExato = partesNome.some(parte => parte.toLowerCase() === searchLower)
+      
+      // 4. CPF (só números)
+      const isNumerico = /^\d+$/.test(search)
+      const cpfMatch = isNumerico && app.cpf.replace(/\D/g, '').includes(search)
+      
+      // Log detalhado
+      if (nomeCompletoExato) {
+        console.log(`✅ Nome completo EXATO (case-insensitive): "${nomeCompleto}" = "${search}"`)
+      } else if (primeiroNomeExato) {
+        console.log(`✅ Primeiro nome EXATO (case-insensitive): "${partesNome[0]}" = "${search}" em "${nomeCompleto}"`)
+      } else if (qualquerNomeExato) {
+        console.log(`✅ Nome EXATO encontrado (case-insensitive): "${search}" em "${nomeCompleto}"`)
+      } else if (cpfMatch) {
+        console.log(`✅ CPF encontrado: "${search}" em "${app.cpf}"`)
+      }
+      
+      return nomeCompletoExato || primeiroNomeExato || qualquerNomeExato || cpfMatch
+    })
+    
+    console.log(`🔍 Pesquisa EXATA por "${search}" encontrou ${filtered.length} resultado(s) de ${allAppointments.length} total`)
+    setDisplayAppointments(filtered)
+  }
+
+  // Mudar status
+  const handleStatusChange = async (appointmentId: string, newStatus: AppointmentStatus) => {
     try {
-      // Atualiza o estado local primeiro
-      const updatedAppointments = appointments.map(app => 
-        app.id === appointmentId ? { ...app, status: newStatus } : app
-      )
-      setAppointments(updatedAppointments)
-
-      // Atualiza a lista filtrada
-      const updatedFiltered = filteredAppointments.map(app => 
-        app.id === appointmentId ? { ...app, status: newStatus } : app
-      )
-      setFilteredAppointments(updatedFiltered)
-
-      // Atualiza no banco de dados em segundo plano
       const { error } = await supabase
         .from("agendamentos")
         .update({ status: newStatus })
@@ -241,22 +121,38 @@ export function AppointmentList() {
 
       if (error) throw error
 
+      // Atualizar lista local
+      const updatedAppointments = allAppointments.map(app => 
+        app.id === appointmentId ? { ...app, status: newStatus } : app
+      )
+      
+      setAllAppointments(updatedAppointments)
+      
+      // Aplicar pesquisa novamente se necessário
+      if (searchTerm.trim()) {
+        handleSearch(searchTerm)
+      } else {
+        setDisplayAppointments(updatedAppointments)
+      }
+
       showNotification("Status atualizado com sucesso!", "success")
     } catch (error) {
       console.error("Erro ao atualizar status:", error)
-      showNotification("Erro ao atualizar status. Tente novamente.", "error")
-      
-      // Reverte as mudanças em caso de erro
-      fetchAppointments()
+      showNotification("Erro ao atualizar status", "error")
     }
   }
 
+  // Carregar dados iniciais
+  useEffect(() => {
+    loadAppointments()
+  }, [])
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div className="flex items-center gap-2">
-          <div className="animate-spin h-5 w-5 border-2 border-green-600 border-t-transparent rounded-full"></div>
-          <span className="text-gray-600">Carregando...</span>
+      <div className="flex items-center justify-center py-12">
+        <div className="flex items-center gap-3">
+          <div className="animate-spin h-6 w-6 border-2 border-green-600 border-t-transparent rounded-full"></div>
+          <span className="text-gray-600 font-medium">Carregando agendamentos...</span>
         </div>
       </div>
     )
@@ -264,83 +160,162 @@ export function AppointmentList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+      {/* Cabeçalho */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
         <div className="flex gap-2 items-center">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
+          <h2 className="text-xl font-semibold text-gray-900">Lista de Agendamentos</h2>
+          
                 <Button 
                   variant="outline" 
-                  size="icon"
-                  onClick={toggleFilterMode}
-                  className={filterByDate ? "border-green-600 text-green-700" : "border-blue-600 text-blue-700"}
-                >
-                  {filterByDate ? <Calendar className="h-4 w-4" /> : <ListFilter className="h-4 w-4" />}
+            size="sm"
+            onClick={loadAppointments}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{filterByDate ? "Filtrando por dia" : "Mostrando todos os agendamentos"}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          {filterByDate && (
-            <DatePicker
-              selected={selectedDate}
-              onSelect={(date) => {
-                handleDateChange(date);
-                // Focar na busca direta no banco quando a data mudar
-                if (date) {
-                  loadAppointmentsForDate(date);
-                }
-              }}
-              className="w-full lg:w-auto"
-            />
-          )}
-          
-          {!filterByDate && !searchTerm && (
-            <div className="text-sm font-medium text-blue-700">
-              Mostrando todos os agendamentos
             </div>
-          )}
-          
-          {searchTerm && searchTerm.trim() && (
-            <div className="text-sm font-medium text-orange-700">
-              🔍 Pesquisa global ativa: "{searchTerm}"
-            </div>
+
+        {/* Indicador de resultados */}
+        <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+          {searchTerm ? (
+            <span className="text-blue-700 font-medium">
+              🔍 {displayAppointments.length} resultado(s) para "{searchTerm}"
+            </span>
+          ) : (
+            <span>📋 {allAppointments.length} agendamentos no total</span>
           )}
         </div>
+        </div>
         
-        <div className="flex-1 w-full lg:w-auto">
-          <SearchAndFilter 
-            onSearch={handleSearch} 
-            onFilter={handleFilter}
-            searchTerm={searchTerm}
-            statusFilter={statusFilter}
-            typeFilter={typeFilter}
-          />
+      {/* Barra de pesquisa */}
+      <div className="bg-white p-4 rounded-lg border shadow-sm">
+        <div className="space-y-2">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+            <Input 
+              placeholder="Digite o nome da pessoa ou CPF..." 
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <p className="text-sm text-gray-500">
+            🎯 <strong>Pesquisa EXATA:</strong> Digite "pollyan", "POLLYAN" ou "Pollyan" → encontra apenas quem tem exatamente esse nome
+            <br />
+            📱 <strong>CPF:</strong> Digite apenas números do CPF (ex: "123", "456")
+            <br />
+            ✅ <strong>Maiúsculas/minúsculas:</strong> Funciona com qualquer combinação de letras
+          </p>
         </div>
       </div>
 
+      {/* Tabela */}
+      <div className="bg-white rounded-lg border shadow-sm">
+        {displayAppointments.length > 0 ? (
+          <div className="max-h-[600px] overflow-y-auto">
+            <div className="rounded-md border overflow-hidden">
       <div className="overflow-x-auto">
-        {filteredAppointments.length > 0 ? (
-          <AppointmentTable 
-            appointments={filteredAppointments}
-            onStatusChange={handleStatusChange}
-          />
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px] lg:w-[300px] font-bold">Nome</TableHead>
+                      <TableHead className="min-w-[120px] lg:w-[150px] font-bold">CPF</TableHead>
+                      <TableHead className="min-w-[150px] lg:w-[200px] font-bold">Data</TableHead>
+                      <TableHead className="min-w-[100px] lg:w-[100px] font-bold">Horário</TableHead>
+                      <TableHead className="min-w-[120px] lg:w-[150px] font-bold">Tipo</TableHead>
+                      <TableHead className="min-w-[120px] lg:w-[150px] font-bold">Status</TableHead>
+                      <TableHead className="w-[100px] font-bold text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayAppointments.map((appointment) => {
+                      const StatusIcon = statusConfig[appointment.status as keyof typeof statusConfig].Icon
+                      return (
+                        <TableRow key={appointment.id}>
+                          <TableCell className="font-medium">{appointment.nome}</TableCell>
+                          <TableCell>{appointment.cpf}</TableCell>
+                          <TableCell>
+                            {format(new Date(`${appointment.data_agendamento}T12:00:00`), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>{appointment.horario}</TableCell>
+                          <TableCell className="capitalize">{appointment.tipo}</TableCell>
+                          <TableCell>
+                            <Badge 
+                              className={`${statusConfig[appointment.status as keyof typeof statusConfig].color} text-white flex items-center gap-1`}
+                            >
+                              <StatusIcon className="w-4 h-4" />
+                              {appointment.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Abrir menu</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {Object.entries(statusConfig).map(([status, config]) => {
+                                  const MenuIcon = config.Icon
+                                  return (
+                                    <DropdownMenuItem
+                                      key={status}
+                                      onClick={() => handleStatusChange(appointment.id, status as AppointmentStatus)}
+                                      disabled={appointment.status === status}
+                                      className="gap-2"
+                                    >
+                                      <MenuIcon className="w-4 h-4" />
+                                      <span>Marcar como {status}</span>
+                                    </DropdownMenuItem>
+                                  )
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            {searchTerm && searchTerm.trim()
-              ? `Nenhum agendamento encontrado para a pesquisa "${searchTerm}".`
-              : filterByDate 
-                ? "Nenhum agendamento encontrado para a data selecionada." 
-                : "Nenhum agendamento encontrado com os filtros aplicados."}
+          <div className="text-center py-12 text-gray-500">
+            <div className="space-y-2">
+              {searchTerm ? (
+                <>
+                  <p className="text-lg">🔍 Nenhum resultado encontrado</p>
+                  <p>Não encontramos agendamentos para "{searchTerm}"</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleSearch("")}
+                    className="mt-2"
+                  >
+                    Limpar pesquisa
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg">📋 Lista vazia</p>
+                  <p>Nenhum agendamento cadastrado no sistema</p>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
       
-      <div className="text-right text-sm text-gray-500">
-        Total: {filteredAppointments.length} agendamento(s)
+      {/* Rodapé */}
+      <div className="flex justify-between text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-lg">
+        <span>
+          Exibindo: <strong>{displayAppointments.length}</strong> agendamentos
+        </span>
+        <span>
+          Total no sistema: <strong>{allAppointments.length}</strong>
+        </span>
       </div>
     </div>
   )
