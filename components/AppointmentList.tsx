@@ -16,7 +16,7 @@ export function AppointmentList() {
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [filterByDate, setFilterByDate] = useState(true)
+  const [filterByDate, setFilterByDate] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
@@ -25,13 +25,12 @@ export function AppointmentList() {
   const fetchAppointments = async () => {
     setIsLoading(true)
     try {
-      // Modificado para limitar o número de registros e usar paginação se necessário
+      // Buscar TODOS os agendamentos sem filtro de data
       const { data, error, count } = await supabase
         .from("agendamentos")
         .select("*", { count: 'exact' })
         .order("data_agendamento", { ascending: true })
-        // Se precisar de paginação:
-        // .range(0, 999)  // Isso limita a 1000 registros por vez
+        .order("horario", { ascending: true })
 
       if (error) {
         console.error("Erro ao buscar agendamentos:", error)
@@ -83,27 +82,31 @@ export function AppointmentList() {
     console.log("Filtro de status:", statusFilter)
     console.log("Filtro de tipo:", typeFilter)
     
-    // Se estiver no modo filtro por data, aplicar filtro de data primeiro
-    if (filterByDate) {
-      const year = selectedDate.getFullYear()
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
-      const day = String(selectedDate.getDate()).padStart(2, '0')
-      const selectedDateStr = `${year}-${month}-${day}`
-      
-      filtered = filtered.filter(app => {
-        return app.data_agendamento === selectedDateStr
-      })
-      console.log(`Após filtro de data ${selectedDateStr}:`, filtered.length)
-    }
+    // PRIORIDADE: Se há termo de pesquisa, buscar em TODOS os agendamentos
+    const hasSearchTerm = searchTerm && searchTerm.trim()
     
-    // Aplicar filtro de busca
-    if (searchTerm && searchTerm.trim()) {
+    if (hasSearchTerm) {
+      // PESQUISA GLOBAL: Ignorar filtro de data quando há pesquisa
+      console.log("🔍 PESQUISA GLOBAL ATIVA - Buscando em todos os agendamentos")
       filtered = filtered.filter(
         (app) => 
           app.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
           app.cpf.includes(searchTerm)
       )
-      console.log(`Após filtro de pesquisa "${searchTerm}":`, filtered.length)
+      console.log(`Após pesquisa global "${searchTerm}":`, filtered.length)
+    } else {
+      // SEM PESQUISA: Aplicar filtro de data apenas se não houver pesquisa e estiver no modo filtro por data
+      if (filterByDate) {
+        const year = selectedDate.getFullYear()
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
+        const day = String(selectedDate.getDate()).padStart(2, '0')
+        const selectedDateStr = `${year}-${month}-${day}`
+        
+        filtered = filtered.filter(app => {
+          return app.data_agendamento === selectedDateStr
+        })
+        console.log(`Após filtro de data específica ${selectedDateStr}:`, filtered.length)
+      }
     }
     
     // Aplicar filtro de status
@@ -170,6 +173,7 @@ export function AppointmentList() {
       const dateStr = `${year}-${month}-${day}`
       
       // Busca diretamente do banco apenas os registros para a data específica
+      // REMOVIDO: filtro que impedia buscar datas passadas
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
@@ -208,12 +212,12 @@ export function AppointmentList() {
     }
   }
 
-  // Modificar o useEffect para usar o novo método
+  // Modificar o useEffect para usar o novo método apenas quando não há pesquisa ativa
   useEffect(() => {
-    if (filterByDate) {
+    if (filterByDate && !(searchTerm && searchTerm.trim())) {
       loadAppointmentsForDate(selectedDate)
     }
-  }, [selectedDate, filterByDate])
+  }, [selectedDate, filterByDate, searchTerm])
 
   const handleStatusChange = async (appointmentId: string, newStatus: string) => {
     try {
@@ -294,9 +298,15 @@ export function AppointmentList() {
             />
           )}
           
-          {!filterByDate && (
+          {!filterByDate && !searchTerm && (
             <div className="text-sm font-medium text-blue-700">
               Mostrando todos os agendamentos
+            </div>
+          )}
+          
+          {searchTerm && searchTerm.trim() && (
+            <div className="text-sm font-medium text-orange-700">
+              🔍 Pesquisa global ativa: "{searchTerm}"
             </div>
           )}
         </div>
@@ -320,9 +330,11 @@ export function AppointmentList() {
           />
         ) : (
           <div className="text-center py-8 text-gray-500">
-            {filterByDate 
-              ? "Nenhum agendamento encontrado para a data selecionada." 
-              : "Nenhum agendamento encontrado com os filtros aplicados."}
+            {searchTerm && searchTerm.trim()
+              ? `Nenhum agendamento encontrado para a pesquisa "${searchTerm}".`
+              : filterByDate 
+                ? "Nenhum agendamento encontrado para a data selecionada." 
+                : "Nenhum agendamento encontrado com os filtros aplicados."}
           </div>
         )}
       </div>
