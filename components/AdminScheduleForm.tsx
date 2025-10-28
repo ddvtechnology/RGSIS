@@ -14,10 +14,10 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 interface AdminScheduleFormProps {
-  onSchedule: () => void
+  onSchedule?: () => void
 }
 
-export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
+export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps = {}) {
   const [formData, setFormData] = useState({
     nome: "",
     cpf: "",
@@ -89,15 +89,18 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
         return
       }
 
-      const dataAjustada = new Date(formData.dataAgendamento!)
-      dataAjustada.setHours(12, 0, 0, 0) // Define para meio-dia para evitar problemas de fuso horário
+      // Importar função de conversão
+      const { dateToDBFormat, formatDateToPtBR } = await import("@/utils/dateUtils")
+      
+      const dataAgendamento = formData.dataAgendamento!
+      const dataFormatadaDB = dateToDBFormat(dataAgendamento)
 
       // Verifica se o horário ainda está disponível
       const { data: agendamentosExistentes, error: checkError } = await supabase
         .from("agendamentos")
         .select("horario")
-        .eq("data_agendamento", format(dataAjustada, "yyyy-MM-dd"))
-        .eq("status", "agendado")
+        .eq("data_agendamento", dataFormatadaDB)
+        .eq("status", "Agendado")
         .eq("horario", formData.horario)
 
       if (checkError) throw checkError
@@ -110,7 +113,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
           confirmButtonColor: '#15803d'
         })
         // Atualiza a lista de horários disponíveis
-        await loadAvailableTimeSlots(dataAjustada)
+        await loadAvailableTimeSlots(dataAgendamento)
         setIsSubmitting(false)
         return
       }
@@ -124,7 +127,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
           data_nascimento: formData.dataNascimento,
           telefone: formData.telefone,
           email: "agendamento@presencial.com",
-          data_agendamento: format(dataAjustada, "yyyy-MM-dd"),
+          data_agendamento: dataFormatadaDB,
           horario: formData.horario,
           tipo: formData.tipo,
           status: "Agendado"
@@ -137,7 +140,7 @@ export function AdminScheduleForm({ onSchedule }: AdminScheduleFormProps) {
 
       const mensagem = `🗓️ *Agendamento RG - São Bento do Una*\n\n` +
         `📋 Nome: ${formData.nome}\n` +
-        `📅 Data: ${format(dataAjustada, "dd/MM/yyyy")}\n` +
+        `📅 Data: ${formatDateToPtBR(dataAgendamento)}\n` +
         `⏰ Horário: ${formData.horario}\n` +
         `📍 Local: Secretaria de Assistência Social\n` +
         `🏥 Tipo: ${formData.tipo}\n\n` +

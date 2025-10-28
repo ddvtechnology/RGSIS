@@ -1,21 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { FileUpload } from "@/components/FileUpload"
-import { supabase } from "@/lib/supabase"
-import { generateTimeSlots, formatDate, formatDateToPtBR, getAvailableTimeSlots } from "@/utils/dateUtils"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Copy } from "lucide-react"
-import { useRouter } from "next/navigation"
-import Swal from 'sweetalert2'
-import { ptBR } from "@/utils/dateUtils"
-import { Metadata } from "next"
 import { AgendamentoForm } from "@/components/AgendamentoForm"
 
 export default function AgendamentoPage() {

@@ -71,15 +71,18 @@ export function AgendamentoForm() {
     setIsSubmitting(true)
 
     try {
-      const dataAjustada = new Date(formData.dataAgendamento!)
-      dataAjustada.setHours(12, 0, 0, 0)
+      // Importar função de conversão
+      const { dateToDBFormat, formatDateToPtBR } = await import("@/utils/dateUtils")
+      
+      const dataAgendamento = formData.dataAgendamento!
+      const dataFormatadaDB = dateToDBFormat(dataAgendamento)
 
       // Verifica disponibilidade
       const { data: agendamentosExistentes, error: checkError } = await supabase
         .from("agendamentos")
         .select("horario")
-        .eq("data_agendamento", format(dataAjustada, "yyyy-MM-dd"))
-        .in("status", ["Agendado", "Confirmado"])
+        .eq("data_agendamento", dataFormatadaDB)
+        .eq("status", "Agendado")
         .eq("horario", formData.horario)
 
       if (checkError) throw checkError
@@ -91,7 +94,7 @@ export function AgendamentoForm() {
           icon: 'warning',
           confirmButtonColor: '#15803d'
         })
-        await loadAvailableTimeSlots(dataAjustada)
+        await loadAvailableTimeSlots(dataAgendamento)
         return
       }
 
@@ -104,7 +107,7 @@ export function AgendamentoForm() {
           data_nascimento: formData.dataNascimento,
           telefone: formData.telefone,
           email: "agendamento@online.com",
-          data_agendamento: format(dataAjustada, "yyyy-MM-dd"),
+          data_agendamento: dataFormatadaDB,
           horario: formData.horario,
           tipo: "online",
           status: "Agendado"
@@ -112,7 +115,7 @@ export function AgendamentoForm() {
 
       if (insertError) throw insertError
 
-      const dataFormatada = format(dataAjustada, "dd/MM/yyyy")
+      const dataFormatada = formatDateToPtBR(dataAgendamento)
 
       const mensagem = `🗓️ *Agendamento RG - São Bento do Una*\n\n` +
         `Olá ${formData.nome},\n\n` +
@@ -185,7 +188,7 @@ export function AgendamentoForm() {
         horario: "",
       })
 
-      await loadAvailableTimeSlots(dataAjustada)
+      await loadAvailableTimeSlots(dataAgendamento)
     } catch (error: any) {
       console.error("Erro ao realizar agendamento:", error)
       await Swal.fire({
