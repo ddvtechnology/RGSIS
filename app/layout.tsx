@@ -5,6 +5,8 @@ import { NotificationProvider } from "@/contexts/NotificationContext"
 import Image from "next/image"
 import { LogoutButton } from "@/components/LogoutButton"
 import type React from "react"
+import SuspensionNotice from "@/components/SuspensionNotice"
+import { SUSPENSION } from "@/suspension"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -45,7 +47,7 @@ export default function RootLayout({
                       <div className="text-sm lg:text-base font-semibold">PREFEITURA MUNICIPAL</div>
                       <div className="text-sm lg:text-base">SÃO BENTO DO UNA</div>
                     </div>
-                    <LogoutButton />
+                    {!SUSPENSION.active && <LogoutButton />}
                   </div>
                 </div>
 
@@ -61,7 +63,7 @@ export default function RootLayout({
                         className="object-contain"
                       />
                     </div>
-                    <LogoutButton />
+                    {!SUSPENSION.active && <LogoutButton />}
                   </div>
                   <div className="text-center">
                     <h1 className="text-lg font-bold mb-1">Sistema de Agendamento de RG</h1>
@@ -75,7 +77,7 @@ export default function RootLayout({
             </header>
 
             <main className="flex-grow container mx-auto max-w-7xl px-4 py-6 md:py-8">
-              {children}
+              {SUSPENSION.active ? <SuspensionNotice /> : children}
             </main>
 
             <footer className="bg-gray-200 text-gray-600 py-4 px-4 mt-auto">
